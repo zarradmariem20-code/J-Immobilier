@@ -1,0 +1,356 @@
+import { FormEvent, useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { ArrowRight, Award, Compass, Home as HomeIcon, Search, ShieldCheck, TrendingUp } from "lucide-react";
+import { Header } from "../components/Header";
+import { Footer } from "../components/Footer";
+import { PropertyCard } from "../components/PropertyCard";
+import { properties } from "../data/properties";
+import { ImageWithFallback } from "../components/figma/ImageWithFallback";
+
+export function Home() {
+  const featuredProperties = properties.filter((p) => p.featured);
+  const [searchLocation, setSearchLocation] = useState("");
+  const [searchDistrict, setSearchDistrict] = useState("");
+  const [searchType, setSearchType] = useState("all");
+  const [transactionType, setTransactionType] = useState("Vente");
+  const navigate = useNavigate();
+
+  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const params = new URLSearchParams();
+    if (searchLocation.trim()) {
+      params.set("q", searchLocation.trim());
+    }
+    if (searchDistrict.trim()) {
+      params.set("district", searchDistrict.trim());
+    }
+    if (searchType !== "all") {
+      params.set("type", searchType);
+    }
+    if (transactionType !== "all") {
+      params.set("transaction", transactionType);
+    }
+
+    navigate(`/listings${params.toString() ? `?${params.toString()}` : ""}`);
+  };
+
+  const editorialPhotos = [
+    "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+    "https://images.unsplash.com/photo-1511818966892-d7d671e672a2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+    "https://images.unsplash.com/photo-1600210492493-0946911123ea?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+  ];
+
+  return (
+    <div className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_38%,_#f4f7fb_100%)]">
+      <Header />
+      <section className="relative overflow-hidden px-4 pb-18 pt-10 sm:px-6 lg:px-8 lg:pb-24">
+        <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="relative z-10">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-4 py-2 text-sm font-medium text-sky-900 shadow-sm backdrop-blur">
+              <Compass className="h-4 w-4" />
+              Sélection premium en Tunisie
+            </div>
+            <h1 className="max-w-3xl font-serif text-5xl font-semibold leading-tight text-slate-950 md:text-6xl">
+              Trouvez votre bien en Tunisie avec une sélection plus nette et plus moderne.
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
+              Explorez Tunis, La Marsa, Hammamet, Sousse ou Sfax avec une recherche plus simple, des filtres clairs et des biens adaptés au marché tunisien.
+            </p>
+            <div className="mt-8 space-y-3">
+              <div className="flex gap-3 flex-wrap sm:flex-nowrap">
+                {[
+                  { value: "Vente", label: "Acheter" },
+                  { value: "Location", label: "Louer" },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setTransactionType(item.value)}
+                    className={`text-lg font-bold transition ${transactionType === item.value ? "text-slate-950 border-b-2 border-slate-950 pb-2" : "text-slate-400"}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <form
+                onSubmit={handleSearch}
+                className="grid max-w-2xl gap-2 rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:grid-cols-[1fr_1fr_1fr_auto] gap-3"
+              >
+                <label className="rounded-[16px] border border-slate-300 bg-slate-50 px-3 py-2">
+                  <span className="mb-1 block text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">Région</span>
+                  <select
+                    value={searchLocation}
+                    onChange={(event) => setSearchLocation(event.target.value)}
+                    className="w-full bg-transparent text-xs sm:text-sm text-slate-950 focus:outline-none"
+                  >
+                    <option value="">Sélectionner région</option>
+                    <option value="Tunis">Tunis</option>
+                    <option value="Ariana">Ariana</option>
+                    <option value="Ben Arous">Ben Arous</option>
+                    <option value="Manouba">Manouba</option>
+                    <option value="La Marsa">La Marsa</option>
+                    <option value="Hammamet">Hammamet</option>
+                    <option value="Nabeul">Nabeul</option>
+                    <option value="Sousse">Sousse</option>
+                    <option value="Sfax">Sfax</option>
+                    <option value="Gabès">Gabès</option>
+                    <option value="Gafsa">Gafsa</option>
+                    <option value="Jendouba">Jendouba</option>
+                    <option value="Kairouan">Kairouan</option>
+                    <option value="Kasserine">Kasserine</option>
+                    <option value="Kebili">Kebili</option>
+                    <option value="Médenine">Médenine</option>
+                    <option value="Monastir">Monastir</option>
+                    <option value="Sidi Bouzid">Sidi Bouzid</option>
+                    <option value="Siliana">Siliana</option>
+                    <option value="Tataouine">Tataouine</option>
+                    <option value="Tozeur">Tozeur</option>
+                  </select>
+                </label>
+                <label className="rounded-[16px] border border-slate-300 bg-slate-50 px-3 py-2">
+                  <span className="mb-1 block text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">Quartier</span>
+                  <input
+                    value={searchDistrict}
+                    onChange={(event) => setSearchDistrict(event.target.value)}
+                    className="w-full bg-transparent text-xs sm:text-sm text-slate-950 placeholder:text-slate-400 focus:outline-none"
+                    placeholder="La Marsa..."
+                  />
+                </label>
+                <label className="rounded-[16px] border border-slate-300 bg-slate-50 px-3 py-2">
+                  <span className="mb-1 block text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">Type de bien</span>
+                  <select
+                    value={searchType}
+                    onChange={(event) => setSearchType(event.target.value)}
+                    className="w-full bg-transparent text-xs sm:text-sm text-slate-950 focus:outline-none"
+                  >
+                    <option value="all">Tous les types</option>
+                    <option value="Appartement">Appartement</option>
+                    <option value="Maison">Maison</option>
+                    <option value="Villa">Villa</option>
+                    <option value="Penthouse">Penthouse</option>
+                  </select>
+                </label>
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center gap-2 rounded-[16px] bg-slate-950 px-4 py-2 font-semibold text-white text-sm transition hover:bg-slate-800"
+                >
+                  <Search className="h-4 w-4" />
+                  Chercher
+                </button>
+              </form>
+            </div>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-3xl border border-white/60 bg-white/80 p-5 shadow-sm">
+                <p className="text-3xl font-bold text-slate-950">500+</p>
+                <p className="mt-1 text-sm text-slate-500">Biens sur le marché tunisien</p>
+              </div>
+              <div className="rounded-3xl border border-white/60 bg-white/80 p-5 shadow-sm">
+                <p className="text-3xl font-bold text-slate-950">98%</p>
+                <p className="mt-1 text-sm text-slate-500">Clients recommandent l'agence</p>
+              </div>
+              <div className="rounded-3xl border border-white/60 bg-white/80 p-5 shadow-sm">
+                <p className="text-3xl font-bold text-slate-950">24h</p>
+                <p className="mt-1 text-sm text-slate-500">Pour organiser une visite à Tunis ou en région</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="relative grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+            <div className="space-y-4 md:pt-10">
+              <div className="overflow-hidden rounded-[32px] border border-white/50 shadow-[0_28px_80px_rgba(15,23,42,0.14)]">
+                <ImageWithFallback src={editorialPhotos[0]} alt="Villa contemporaine" className="h-72 w-full object-cover" />
+              </div>
+              <div className="rounded-[28px] bg-slate-950 p-6 text-white shadow-xl">
+                <p className="text-xs uppercase tracking-[0.3em] text-sky-300">Sélection éditoriale</p>
+                <p className="mt-3 font-serif text-2xl">Des biens qui évoquent La Marsa, Gammarth, Hammamet et les régions les plus recherchées.</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="overflow-hidden rounded-[32px] border border-white/50 shadow-[0_28px_80px_rgba(15,23,42,0.14)]">
+                <ImageWithFallback src={editorialPhotos[1]} alt="Intérieur lumineux" className="h-96 w-full object-cover" />
+              </div>
+              <div className="overflow-hidden rounded-[32px] border border-white/50 shadow-[0_28px_80px_rgba(15,23,42,0.14)]">
+                <ImageWithFallback src={editorialPhotos[2]} alt="Salon design" className="h-56 w-full object-cover" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y border-slate-200/70 bg-white/80 py-12 backdrop-blur">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="space-y-2">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-sky-100">
+                <HomeIcon className="h-8 w-8 text-sky-700" />
+              </div>
+              <h3 className="text-3xl font-bold text-slate-950">500+</h3>
+              <p className="text-slate-600">Propriétés listées</p>
+            </div>
+            <div className="space-y-2">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-sky-100">
+                <TrendingUp className="h-8 w-8 text-sky-700" />
+              </div>
+              <h3 className="text-3xl font-bold text-slate-950">1000+</h3>
+              <p className="text-slate-600">Clients satisfaits</p>
+            </div>
+            <div className="space-y-2">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-sky-100">
+                <Award className="h-8 w-8 text-sky-700" />
+              </div>
+              <h3 className="text-3xl font-bold text-slate-950">15+</h3>
+              <p className="text-slate-600">Ans d'expérience</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-18">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mb-12 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-700">Sélection en vedette</p>
+              <h2 className="mt-3 font-serif text-4xl font-semibold text-slate-950">Des annonces mieux organisées et plus engageantes</h2>
+              <p className="mt-3 max-w-2xl text-slate-600">
+                Chaque bien présente maintenant des tags, une fiche plus lisible et des visuels plus riches pour améliorer la prise de décision.
+              </p>
+            </div>
+            <Link
+              to="/listings"
+              className="inline-flex items-center gap-2 self-start rounded-full border border-slate-200 bg-white px-5 py-3 font-semibold text-slate-900 transition hover:border-sky-200 hover:text-sky-700"
+            >
+              Voir toutes les propriétés
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {featuredProperties.map((property) => (
+              <PropertyCard key={property.id} property={property} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-18">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="rounded-[32px] bg-slate-950 p-8 text-white shadow-[0_28px_80px_rgba(15,23,42,0.16)]">
+              <ShieldCheck className="h-10 w-10 text-sky-300" />
+              <h3 className="mt-6 font-serif text-3xl">Un parcours plus fiable</h3>
+              <p className="mt-4 text-sm leading-7 text-slate-300">
+                Formulaires de contact fonctionnels, demandes enregistrées dans le navigateur et informations plus structurées pour éviter les pages trop vides.
+              </p>
+            </div>
+            <div className="rounded-[32px] border border-white/70 bg-white/80 p-8 shadow-sm">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">Nos engagements</p>
+              <div className="mt-6 space-y-6">
+                <div>
+                  <h3 className="text-xl font-semibold text-slate-950">Positionnement local</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">Une présentation pensée pour les zones recherchées en Tunisie et leurs profils d'acheteurs ou locataires.</p>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-slate-950">Photos inspirantes</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">Des visuels éditoriaux et des galeries multiples pour mieux projeter l'acheteur.</p>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-slate-950">Dossiers organisés</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">Filtres, tri, favoris et fiches détaillées pour naviguer sans friction.</p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-[32px] border border-slate-200 bg-[linear-gradient(180deg,#eef8ff_0%,#ffffff_100%)] p-8 shadow-sm">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">Quartiers demandés</p>
+              <div className="mt-6 space-y-4">
+                {[
+                  { area: "La Marsa", label: "Biens premium, vue mer et vie de quartier" },
+                  { area: "Les Berges du Lac", label: "Résidences modernes et adresse d'affaires" },
+                  { area: "Hammamet", label: "Villas de vacances et locations saisonnières" },
+                ].map((item) => (
+                  <div key={item.area} className="rounded-2xl border border-white bg-white/80 p-4">
+                    <p className="font-semibold text-slate-950">{item.area}</p>
+                    <p className="mt-1 text-sm text-slate-600">{item.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-18">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-700">Pourquoi nous choisir</p>
+            <h2 className="mt-3 font-serif text-4xl font-semibold text-slate-950">Une agence plus moderne et mieux organisée</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-slate-600">
+              Le site met davantage en avant la qualité de l'accompagnement et la valeur perçue des biens grâce à une présentation plus nette.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+            <div className="rounded-[28px] border border-slate-200 p-8">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-sky-100">
+                <Search className="h-8 w-8 text-sky-700" />
+              </div>
+              <h3 className="mt-6 text-xl font-semibold text-slate-950">Recherche plus ciblée</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-600">Recherche par localisation, type, prix et tri dynamique sur la page annonces.</p>
+            </div>
+            <div className="rounded-[28px] border border-slate-200 p-8">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-sky-100">
+                <TrendingUp className="h-8 w-8 text-sky-700" />
+              </div>
+              <h3 className="mt-6 text-xl font-semibold text-slate-950">Navigation plus fluide</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-600">Les cartes, pages et appels à l'action sont plus cohérents entre mobile et desktop.</p>
+            </div>
+            <div className="rounded-[28px] border border-slate-200 p-8">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-sky-100">
+                <Award className="h-8 w-8 text-sky-700" />
+              </div>
+              <h3 className="mt-6 text-xl font-semibold text-slate-950">Image de marque plus claire</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-600">Logo agrandi, meilleure lisibilité et ton visuel plus premium sur tout le site.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-18">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+            <div className="rounded-[32px] border border-slate-200 bg-white/85 p-8 shadow-sm">
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-700">Témoignage</p>
+              <blockquote className="mt-6 font-serif text-3xl leading-tight text-slate-950">
+                “Le site donne enfin une impression premium cohérente avec les biens présentés, et les demandes de visite sont simples à lancer.”
+              </blockquote>
+              <p className="mt-6 text-sm font-semibold text-slate-700">Claire M., acheteuse à Neuilly-sur-Seine</p>
+            </div>
+            <div className="rounded-[32px] bg-slate-950 p-8 text-white shadow-[0_28px_80px_rgba(15,23,42,0.16)]">
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-300">Prochaine étape</p>
+              <h2 className="mt-3 font-serif text-4xl font-semibold">Prêt à faire évoluer encore le site ?</h2>
+              <p className="mt-4 max-w-2xl text-slate-300">
+                Vous pouvez maintenant présenter des biens avec plus d'impact. La base est prête pour intégrer ensuite un vrai back-office, des rendez-vous synchronisés ou une connexion CRM.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-4">
+                <Link
+                  to="/contact"
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
+                >
+                  Contacter l'agence
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  to="/about"
+                  className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 font-semibold text-white transition hover:bg-white/5"
+                >
+                  Découvrir l'agence
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <Footer />
+    </div>
+  );
+}
