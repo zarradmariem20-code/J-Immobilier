@@ -15,16 +15,14 @@ import {
 } from "lucide-react";
 import { Link } from "react-router";
 import {
-  clearAdminSession,
   deleteListingSubmission,
-  getAdminSession,
   getListingSubmissions,
-  setAdminSession,
   toggleListingFeatured,
   updateListingSubmissionStatus,
-  type AdminSession,
   type ListingSubmission,
 } from "../utils/storage";
+import { useNavigate } from "react-router";
+import { supabase } from "../../lib/supabase";
 
 const statusChip: Record<ListingSubmission["status"], string> = {
   pending: "bg-amber-100 text-amber-700",
@@ -58,6 +56,23 @@ function formatDate(value?: string) {
 
 export function Admin() {
   const [items, setItems] = useState<ListingSubmission[]>(getListingSubmissions());
+  const navigate = useNavigate();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      if (!user) {
+        navigate("/login");
+      }
+    };
+    fetchUser();
+    const { data: listener } = supabase.auth.onAuthStateChange(fetchUser);
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, [navigate]);
   const [adminSession, setAdminSessionState] = useState<AdminSession | null>(getAdminSession());
   const [loginEmail, setLoginEmail] = useState("admin@tawla.tn");
   const [loginPassword, setLoginPassword] = useState("");

@@ -4,7 +4,8 @@ import { useNavigate } from "react-router";
 import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
 import { LoginModal } from "../components/LoginModal";
-import { createListingSubmission, getAuthProfile, isUserLoggedIn, type AuthProfile } from "../utils/storage";
+import { supabase } from "../../lib/supabase";
+import { createSubmission, uploadAllMedia } from "../../lib/api";
 
 function formatPriceInput(value: string) {
   return value.replace(/[^\d]/g, "").slice(0, 9);
@@ -25,8 +26,9 @@ function formatDateTime(value: string) {
 
 export function SubmitListing() {
   const navigate = useNavigate();
-  const [authProfile, setAuthProfile] = useState<AuthProfile | null>(null);
+  const [authProfile, setAuthProfile] = useState<any>(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -48,23 +50,34 @@ export function SubmitListing() {
   const [submissionReceipt, setSubmissionReceipt] = useState<SubmissionReceipt | null>(null);
 
   useEffect(() => {
-    const syncAuth = () => {
-      setAuthProfile(isUserLoggedIn() ? getAuthProfile() : null);
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setAuthProfile(user);
+      setLoading(false);
+      if (!user) {
+        navigate("/login");
+      }
     };
-
-    syncAuth();
-    window.addEventListener("auth-state-changed", syncAuth);
-    return () => window.removeEventListener("auth-state-changed", syncAuth);
-  }, []);
+    fetchUser();
+    const { data: listener } = supabase.auth.onAuthStateChange(fetchUser);
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   useEffect(() => {
-    if (!authProfile) {
-      return;
-    }
-
-    setFullName((prev) => prev || authProfile.name);
+    if (!authProfile) return;
+    setFullName((prev) => prev || authProfile.user_metadata?.full_name || authProfile.email || "");
     setEmail((prev) => prev || authProfile.email || "");
   }, [authProfile]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#f8fbff] to-[#f3f6fb]">
+        <span className="text-lg text-sky-700 animate-pulse">Chargement...</span>
+      </div>
+    );
+  }
 
   const getVideoDuration = (file: File) =>
     new Promise<number>((resolve, reject) => {
@@ -85,17 +98,95 @@ export function SubmitListing() {
 
   const handlePhotosChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files ?? []);
-
     if (selected.length > 7) {
       setPhotoError("Maximum 7 photos autorisees.");
       setPhotos(selected.slice(0, 7));
       return;
     }
-
     setPhotoError("");
     setPhotos(selected);
-  };
-
+                    <div>
+                      <label className="block mb-1 text-sm font-semibold text-slate-700">Ville</label>
+                      <input
+                        type="text"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none transition"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block mb-1 text-sm font-semibold text-slate-700">Type de bien</label>
+                      <select
+                        value={propertyType}
+                        onChange={(e) => setPropertyType(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none transition"
+                      >
+                        <option>Appartement</option>
+                        <option>Maison</option>
+                        <option>Villa</option>
+                        <option>Commercial</option>
+                        <option>Terrain</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block mb-1 text-sm font-semibold text-slate-700">Type de transaction</label>
+                      <select
+                        value={transactionType}
+                        onChange={(e) => setTransactionType(e.target.value as any)}
+                        className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none transition"
+                      >
+                        <option value="Vente">Vente</option>
+                        <option value="Location">Location</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-semibold text-slate-700">Titre de l'annonce</label>
+                    <input
+                      type="text"
+                      value={listingTitle}
+                      onChange={(e) => setListingTitle(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none transition"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-semibold text-slate-700">Prix</label>
+                    <input
+                      type="text"
+                      value={listingPrice}
+                      onChange={(e) => setListingPrice(formatPriceInput(e.target.value))}
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none transition"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-semibold text-slate-700">Description</label>
+                    <textarea
+                      value={listingDescription}
+                      onChange={(e) => setListingDescription(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none transition min-h-[100px]"
+                      required
+                    />
+                  </div>
+                  {/* ...existing code for media uploads, etc... */}
+                  <button
+                    type="submit"
+                    className="w-full rounded-full bg-sky-700 px-6 py-3 text-white font-semibold shadow-lg hover:bg-sky-800 transition text-lg mt-2"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Envoi en cours..." : "Soumettre l'annonce"}
+                  </button>
+                </form>
+              )}
+            </div>
+          </main>
+          <Footer />
+        </div>
+      );
   const handleVideoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] ?? null;
 
@@ -134,7 +225,7 @@ export function SubmitListing() {
     setFormError("");
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!authProfile) {
@@ -159,34 +250,43 @@ export function SubmitListing() {
     setFormError("");
     setIsLoading(true);
 
-    setTimeout(() => {
-      const created = createListingSubmission({
+    try {
+      const { photoUrls, videoUrl } = await uploadAllMedia(photos, videoFile);
+      const created = await createSubmission({
         title: listingTitle.trim(),
         price: Number(listingPrice || 0),
-        transactionType,
+        transaction_type: transactionType,
+        region: city,
         location: city,
-        mapLocationQuery: mapLocationQuery.trim(),
-        nearbyCommodities: nearbyCommoditiesInput
+        map_location_query: mapLocationQuery.trim(),
+        nearby_commodities: nearbyCommoditiesInput
           .split(",")
           .map((item) => item.trim())
           .filter(Boolean),
-        propertyType,
+        property_type: propertyType,
+        bedrooms: 3,
+        bathrooms: 2,
+        area: 150,
         description: listingDescription.trim(),
-        fullName: fullName.trim(),
+        full_name: fullName.trim(),
         email: email.trim(),
         phone: phone.trim(),
-        photoCount: photos.length,
-        hasVideo: !!videoFile,
+        cover_image_url: photoUrls[0] ?? "",
+        photo_urls: photoUrls,
+        video_url: videoUrl,
       });
 
-      setIsLoading(false);
       setSubmissionReceipt({
         id: created.id,
         title: created.title,
         sentAt: new Date().toISOString(),
       });
       resetListingFields();
-    }, 750);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Échec de la soumission.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -484,3 +584,4 @@ export function SubmitListing() {
     </div>
   );
 }
+

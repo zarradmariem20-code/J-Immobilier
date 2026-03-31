@@ -57,7 +57,7 @@ function isBrowser() {
   return typeof window !== "undefined";
 }
 
-function notifyAuthChange() {
+export function notifyAuthChange() {
   if (!isBrowser()) {
     return;
   }

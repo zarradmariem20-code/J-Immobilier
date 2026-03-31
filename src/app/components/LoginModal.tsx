@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Building2, Facebook, RefreshCw, X } from "lucide-react";
 import { getAuthProfile, isUserLoggedIn, setAuthSession, type AuthProfile } from "../utils/storage";
+import { supabase } from "../../lib/supabase";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -71,15 +72,21 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
     };
   }, [isOpen]);
 
-  const handleSocialLogin = (provider: "google" | "facebook") => {
-    const providerLabel = provider === "google" ? "Google" : "Facebook";
-    setAuthSession({
-      name: authProfile?.name || deriveNameFromEmail(email) || `Utilisateur ${providerLabel}`,
-      email: email.trim() || undefined,
-      provider,
-    });
-    onClose();
-    resetForm();
+  const handleSocialLogin = async (provider: "google" | "facebook") => {
+    try {
+      // Store the current path for post-auth redirect
+      const currentPath = window.location.pathname + window.location.search + window.location.hash;
+      localStorage.setItem("postAuthRedirect", currentPath);
+      await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: window.location.origin + "/auth-handler",
+          queryParams: provider === "google" ? { prompt: "select_account" } : undefined,
+        },
+      });
+    } catch (error) {
+      setAuthError("Erreur lors de la connexion avec " + provider + ".");
+    }
   };
 
   const startOtpFlow = (event: React.FormEvent) => {

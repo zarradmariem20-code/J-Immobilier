@@ -8,11 +8,12 @@ import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import editorialImage from "../../assets/image.png";
 import editorialImageTwo from "../../assets/image1.jpeg";
 import editorialImageThree from "../../assets/image2.jpg";
-import { getPublicProperties } from "../utils/publicListings";
+import type { Property } from "../data/properties";
+import { getProperties } from "../../lib/api";
 import { isUserLoggedIn } from "../utils/storage";
 
 export function Home() {
-  const [publicProperties, setPublicProperties] = useState(getPublicProperties());
+  const [publicProperties, setPublicProperties] = useState<Property[]>([]);
   const featuredProperties = publicProperties.filter((p) => p.featured).slice(0, 6);
   const [searchLocation, setSearchLocation] = useState("");
   const [searchDistrict, setSearchDistrict] = useState("");
@@ -103,9 +104,29 @@ export function Home() {
   }, []);
 
   useEffect(() => {
-    const syncListings = () => setPublicProperties(getPublicProperties());
-    window.addEventListener("listings-updated", syncListings);
-    return () => window.removeEventListener("listings-updated", syncListings);
+    const mapProperty = (item: Awaited<ReturnType<typeof getProperties>>["data"][number]): Property => ({
+      id: item.id,
+      title: item.title,
+      price: item.price,
+      transactionType: item.transaction_type,
+      location: item.location,
+      mapLocationQuery: item.map_location_query,
+      nearbyCommodities: item.nearby_commodities,
+      bedrooms: item.bedrooms,
+      bathrooms: item.bathrooms,
+      area: item.area,
+      type: item.property_type,
+      image: item.cover_image_url,
+      gallery: item.gallery_urls,
+      description: item.description ?? "",
+      features: item.features ?? [],
+      tags: item.tags ?? [],
+      featured: item.featured,
+    });
+
+    getProperties({ limit: 24 })
+      .then((res) => setPublicProperties(res.data.map(mapProperty)))
+      .catch(() => setPublicProperties([]));
   }, []);
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {

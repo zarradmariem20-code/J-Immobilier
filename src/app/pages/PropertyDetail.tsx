@@ -5,11 +5,12 @@ import { Footer } from "../components/Footer";
 import { Bed, Bath, Maximize, MapPin, Check, Heart, CalendarDays, ChevronLeft, ChevronRight, Expand, Share2, Flag, MessageCircle, PhoneCall, Home, Sparkles, ThumbsUp, ThumbsDown, PlayCircle, X } from "lucide-react";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { formatPrice } from "../utils/format";
-import { getFavoriteIds, saveInquiry, toggleFavoriteId, isUserLoggedIn } from "../utils/storage";
+import { getFavoriteIds, toggleFavoriteId } from "../utils/storage";
 import { PropertyCard } from "../components/PropertyCard";
-import { getPublicProperties } from "../utils/publicListings";
+import type { Property } from "../data/properties";
 import { LoginModal } from "../components/LoginModal.tsx";
 import showcaseVideo from "../../assets/AQNXnnPnKdMQ5estjhWkd2IhZaaZUHAtL8ze9gnFvSqh433mUscb0yB9S4Q55Hlyye5VU9-jXyE7nhUVsrLwPLB9rtniZUy_xRrGkMY.mp4";
+import { createInquiry, createReport, getProperties, getProperty, toggleFavorite } from "../../lib/api";
 
 type MediaItem =
   | { kind: "image"; src: string }
@@ -17,11 +18,11 @@ type MediaItem =
 
 export function PropertyDetail() {
   const { id } = useParams();
-  const [allProperties, setAllProperties] = useState(getPublicProperties());
-  const property = allProperties.find((p) => p.id === Number(id));
+  const [allProperties, setAllProperties] = useState<Property[]>([]);
+  const [property, setProperty] = useState<Property | null>(null);
   const showcaseVideoSrc = property?.id === 1 ? showcaseVideo : null;
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [isLoggedIn, setIsLoggedIn] = useState(isUserLoggedIn());
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const mediaItems: MediaItem[] = property
     ? [
         ...(showcaseVideoSrc ? [{ kind: "video" as const, src: showcaseVideoSrc }] : []),
@@ -45,11 +46,10 @@ export function PropertyDetail() {
   const activeMediaIndex = mediaItems.findIndex((item) => item.kind === activeMedia.kind && item.src === activeMedia.src);
 
   const handleContactClick = (type: "whatsapp" | "call") => {
-    if (!isUserLoggedIn()) {
+    if (!isLoggedIn) {
       setLoginModalOpen(true);
       return;
     }
-    
     if (isMobile) {
       const phone = "+21695123456";
       if (type === "whatsapp") {
@@ -59,7 +59,6 @@ export function PropertyDetail() {
       }
       return;
     }
-    
     setIsContactModalOpen(true);
   };
 
@@ -72,30 +71,64 @@ export function PropertyDetail() {
   }, []);
 
   useEffect(() => {
-    const syncListings = () => setAllProperties(getPublicProperties());
-    window.addEventListener("listings-updated", syncListings);
-    return () => window.removeEventListener("listings-updated", syncListings);
-  }, []);
+    const mapProperty = (item: Awaited<ReturnType<typeof getProperties>>["data"][number]): Property => ({
+      id: item.id,
+      title: item.title,
+      price: item.price,
+      transactionType: item.transaction_type,
+      location: item.location,
+      mapLocationQuery: item.map_location_query,
+      nearbyCommodities: item.nearby_commodities,
+      bedrooms: item.bedrooms,
+      bathrooms: item.bathrooms,
+      area: item.area,
+      type: item.property_type,
+      image: item.cover_image_url,
+      gallery: item.gallery_urls,
+      description: item.description ?? "",
+      features: item.features ?? [],
+      tags: item.tags ?? [],
+      featured: item.featured,
+    });
+
+    getProperties({ limit: 8 })
+      .then((res) => setAllProperties(res.data.map(mapProperty)))
+      .catch(() => setAllProperties([]));
+
+    if (id) {
+      getProperty(Number(id))
+        .then((item) => setProperty(mapProperty(item)))
+        .catch(() => setProperty(null));
+    }
+  }, [id]);
 
   useEffect(() => {
-    const handleAuthStateChange = () => {
-      setIsLoggedIn(isUserLoggedIn());
+    const fetchUser = async () => {
+      const { data: { user } } = await import("../../lib/supabase").then(m => m.supabase.auth.getUser());
+      setIsLoggedIn(!!user);
     };
-    window.addEventListener("auth-state-changed", handleAuthStateChange);
-    return () => window.removeEventListener("auth-state-changed", handleAuthStateChange);
+    fetchUser();
+    const { data: listener } = require("../../lib/supabase").supabase.auth.onAuthStateChange(fetchUser);
+    return () => {
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
-    const handleLoginSuccess = () => {
-      if (loginModalOpen && isUserLoggedIn()) {
+    if (!loginModalOpen) return;
+    const fetchUser = async () => {
+      const { data: { user } } = await import("../../lib/supabase").then(m => m.supabase.auth.getUser());
+      if (user) {
         setIsLoggedIn(true);
         setLoginModalOpen(false);
         setIsContactModalOpen(true);
       }
     };
-
-    window.addEventListener("auth-state-changed", handleLoginSuccess);
-    return () => window.removeEventListener("auth-state-changed", handleLoginSuccess);
+    fetchUser();
+    const { data: listener } = require("../../lib/supabase").supabase.auth.onAuthStateChange(fetchUser);
+    return () => {
+      listener.subscription.unsubscribe();
+    };
   }, [loginModalOpen]);
 
   useEffect(() => {
@@ -161,7 +194,7 @@ export function PropertyDetail() {
     setActiveMedia(mediaItems[nextIndex]);
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!formState.fullName || !formState.email || !formState.phone) {
@@ -169,15 +202,13 @@ export function PropertyDetail() {
       return;
     }
 
-    saveInquiry({
-      id: `${Date.now()}`,
-      propertyId: property.id,
-      propertyTitle: property.title,
-      fullName: formState.fullName,
+    await createInquiry({
+      property_id: property.id,
+      property_title: property.title,
+      full_name: formState.fullName,
       email: formState.email,
       phone: formState.phone,
       message: formState.message,
-      createdAt: new Date().toISOString(),
     });
 
     setSubmitMessage("Votre demande a été enregistrée. L'agence peut maintenant vous recontacter avec toutes les informations nécessaires.");
@@ -317,7 +348,14 @@ export function PropertyDetail() {
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsFavorite(toggleFavoriteId(property.id).includes(property.id))}
+                  onClick={async () => {
+                    if (!isUserLoggedIn()) {
+                      setLoginModalOpen(true);
+                      return;
+                    }
+                    await toggleFavorite(property.id).catch(() => {});
+                    setIsFavorite(toggleFavoriteId(property.id).includes(property.id));
+                  }}
                   className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-3 font-semibold transition ${
                     isFavorite
                       ? "border-rose-200 bg-rose-50 text-rose-600"
@@ -327,11 +365,26 @@ export function PropertyDetail() {
                   <Heart className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`} />
                   <span className="hidden sm:inline">Sauvegarder</span>
                 </button>
-                <button type="button" className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 font-semibold text-slate-700 transition hover:border-slate-300">
+                <button type="button" onClick={() => {
+                  const url = window.location.href;
+                  if (navigator.share) {
+                    navigator.share({ title: property.title, url }).catch(() => {});
+                  } else {
+                    navigator.clipboard.writeText(url).catch(() => {});
+                    setSubmitMessage("Le lien de l'annonce a été copié.");
+                  }
+                }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 font-semibold text-slate-700 transition hover:border-slate-300">
                   <Share2 className="h-4 w-4" />
                   <span className="hidden sm:inline">Partager</span>
                 </button>
-                <button type="button" className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 font-semibold text-slate-700 transition hover:border-slate-300">
+                <button type="button" onClick={async () => {
+                  if (!isUserLoggedIn()) {
+                    setLoginModalOpen(true);
+                    return;
+                  }
+                  await createReport({ property_id: property.id, reason: "wrong_info", description: `Signalement depuis la fiche ${property.title}` }).catch(() => {});
+                  setSubmitMessage("Le signalement a été envoyé à l'administrateur.");
+                }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 font-semibold text-slate-700 transition hover:border-slate-300">
                   <Flag className="h-4 w-4" />
                   <span className="hidden sm:inline">Signaler</span>
                 </button>

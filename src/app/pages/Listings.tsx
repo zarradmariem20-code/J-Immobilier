@@ -4,7 +4,8 @@ import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
 import { PropertyCard } from "../components/PropertyCard";
 import { ChevronDown, Search } from "lucide-react";
-import { getPublicProperties } from "../utils/publicListings";
+import type { Property } from "../data/properties";
+import { getProperties } from "../../lib/api";
 
 export function Listings() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -13,7 +14,7 @@ export function Listings() {
   const [priceRange, setPriceRange] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>(searchParams.get("q") ?? "");
   const [sortBy, setSortBy] = useState<string>("featured");
-  const [allProperties, setAllProperties] = useState(getPublicProperties());
+  const [allProperties, setAllProperties] = useState<Property[]>([]);
   const [typeOpen, setTypeOpen] = useState(false);
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
@@ -71,9 +72,29 @@ export function Listings() {
   }, [filterType, searchTerm, setSearchParams, transactionType]);
 
   useEffect(() => {
-    const syncListings = () => setAllProperties(getPublicProperties());
-    window.addEventListener("listings-updated", syncListings);
-    return () => window.removeEventListener("listings-updated", syncListings);
+    const mapProperty = (item: Awaited<ReturnType<typeof getProperties>>["data"][number]): Property => ({
+      id: item.id,
+      title: item.title,
+      price: item.price,
+      transactionType: item.transaction_type,
+      location: item.location,
+      mapLocationQuery: item.map_location_query,
+      nearbyCommodities: item.nearby_commodities,
+      bedrooms: item.bedrooms,
+      bathrooms: item.bathrooms,
+      area: item.area,
+      type: item.property_type,
+      image: item.cover_image_url,
+      gallery: item.gallery_urls,
+      description: item.description ?? "",
+      features: item.features ?? [],
+      tags: item.tags ?? [],
+      featured: item.featured,
+    });
+
+    getProperties({ limit: 100 })
+      .then((res) => setAllProperties(res.data.map(mapProperty)))
+      .catch(() => setAllProperties([]));
   }, []);
 
   const filteredProperties = allProperties.filter((property) => {

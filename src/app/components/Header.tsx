@@ -1,9 +1,11 @@
+
 import { Link, useLocation, useNavigate } from "react-router";
 import { LogOut, Menu, Plus, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BrandLogo } from "./BrandLogo";
 import { LoginModal } from "./LoginModal.tsx";
-import { clearAuthSession, getAuthProfile, isUserLoggedIn, type AuthProfile } from "../utils/storage";
+import { clearAuthSession } from "../utils/storage";
+import { supabase } from "../../lib/supabase";
 
 export function Header() {
   const location = useLocation();
@@ -12,7 +14,7 @@ export function Header() {
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"login">("login");
   const [isScrolled, setIsScrolled] = useState(false);
-  const [authProfile, setAuthProfile] = useState<AuthProfile | null>(null);
+  const [authProfile, setAuthProfile] = useState<any>(null);
   const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
 
   const handleAddListingClick = () => {
@@ -46,24 +48,23 @@ export function Header() {
   }, []);
 
   useEffect(() => {
-    const syncAuth = () => {
-      setAuthProfile(isUserLoggedIn() ? getAuthProfile() : null);
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setAuthProfile(user);
+      // If just logged in via modal and a redirect is pending, just close modal and clear redirect (no navigation)
+      if (user && pendingRedirect) {
+        setPendingRedirect(null);
+        setLoginModalOpen(false);
+      }
     };
+    fetchUser();
+    const { data: listener } = supabase.auth.onAuthStateChange(fetchUser);
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, [pendingRedirect, navigate]);
 
-    syncAuth();
-    window.addEventListener("auth-state-changed", syncAuth);
-    return () => window.removeEventListener("auth-state-changed", syncAuth);
-  }, []);
-
-  useEffect(() => {
-    if (!authProfile || !pendingRedirect) {
-      return;
-    }
-
-    setLoginModalOpen(false);
-    navigate(pendingRedirect);
-    setPendingRedirect(null);
-  }, [authProfile, navigate, pendingRedirect]);
+  // Removed effect that auto-navigates after login. Now, after login, user stays on the same screen.
 
   const isActive = (path: string) => location.pathname === path;
   const isHomePage = location.pathname === "/";
@@ -74,12 +75,14 @@ export function Header() {
     { path: "/about", label: "À Propos" },
     { path: "/contact", label: "Contact" },
   ];
-  const userInitials = authProfile?.name
+  const userName = authProfile?.user_metadata?.full_name || authProfile?.email || "Utilisateur";
+  const userInitials = userName
     ?.split(" ")
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("") || "JI";
+  const avatarUrl = authProfile?.user_metadata?.avatar_url || null;
   return (
     <>
       <header
@@ -125,11 +128,22 @@ export function Header() {
               </button>
               {authProfile ? (
                 <>
-                  <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-950 text-xs font-bold text-white shadow-sm">
-                    {userInitials}
-                  </div>
+                  <Link to="/account" className="flex items-center gap-2 group">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="avatar" className="h-8 w-8 rounded-full object-cover border border-slate-300" />
+                    ) : (
+                      <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-950 text-xs font-bold text-white shadow-sm">
+                        {userInitials}
+                      </div>
+                    )}
+                    <span className="font-semibold text-slate-900 group-hover:underline max-w-[120px] truncate">{userName}</span>
+                  </Link>
                   <button
-                    onClick={() => clearAuthSession()}
+                    onClick={async () => {
+                      await supabase.auth.signOut();
+                      setAuthProfile(null);
+                      navigate("/");
+                    }}
                     className={`inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 text-sm font-semibold text-slate-700 transition hover:border-rose-200 hover:text-rose-600 ${isHomePage ? "px-3 py-1" : "px-4 py-2"}`}
                   >
                     <LogOut className="h-4 w-4" />
