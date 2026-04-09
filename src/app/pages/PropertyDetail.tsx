@@ -1,41 +1,99 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
-import { Bed, Bath, Maximize, MapPin, Check, Heart, CalendarDays, ChevronLeft, ChevronRight, Expand, Share2, Flag, MessageCircle, PhoneCall, Home, Sparkles, ThumbsUp, ThumbsDown, PlayCircle, X } from "lucide-react";
+import { Bed, Bath, Maximize, MapPin, Check, Heart, CalendarDays, ChevronLeft, ChevronRight, Expand, Share2, Flag, MessageCircle, PhoneCall, PlayCircle, X } from "lucide-react";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { formatPrice } from "../utils/format";
-import { getFavoriteIds, toggleFavoriteId } from "../utils/storage";
+import { getFavoriteIds, isUserLoggedIn, toggleFavoriteId } from "../utils/storage";
 import { PropertyCard } from "../components/PropertyCard";
 import type { Property } from "../data/properties";
 import { LoginModal } from "../components/LoginModal.tsx";
-import showcaseVideo from "../../assets/AQNXnnPnKdMQ5estjhWkd2IhZaaZUHAtL8ze9gnFvSqh433mUscb0yB9S4Q55Hlyye5VU9-jXyE7nhUVsrLwPLB9rtniZUy_xRrGkMY.mp4";
-import { createInquiry, createReport, getProperties, getProperty, toggleFavorite } from "../../lib/api";
+import facebookLogo from "../../assets/Facebook_Logo.png";
+import instagramLogo from "../../assets/insta.avif";
+import tiktokLogo from "../../assets/tiktok-.webp";
+import { createReport, createVisit, getProperty, subscribeToPropertiesRealtime, toggleFavorite } from "../../lib/api";
+import { supabase } from "../../lib/supabase";
+import { getCachedPublicProperties, getPublicPropertiesAsync } from "../utils/publicListings";
 
 type MediaItem =
   | { kind: "image"; src: string }
   | { kind: "video"; src: string };
 
+const companySocialLinks = [
+  {
+    label: "Facebook",
+    href: "https://www.facebook.com/profile.php?id=100054570723975&sk=followers",
+    logoSrc: facebookLogo,
+    buttonClass: "border-slate-200 bg-[#f3f7ff] hover:bg-[#e9f1ff]",
+  },
+  {
+    label: "Instagram",
+    href: "https://www.instagram.com/journal_immobilier?igsh=Mzl3eDE2eHZneGlv",
+    logoSrc: instagramLogo,
+    buttonClass: "border-slate-200 bg-[#fff4fb] hover:bg-[#ffe9f6]",
+  },
+  {
+    label: "TikTok",
+    href: "https://www.tiktok.com/@journal_immo2?is_from_webapp=1&sender_device=pc",
+    logoSrc: tiktokLogo,
+    buttonClass: "border-slate-200 bg-[#f5f7fa] hover:bg-slate-100",
+  },
+];
+
 export function PropertyDetail() {
   const { id } = useParams();
-  const [allProperties, setAllProperties] = useState<Property[]>([]);
-  const [property, setProperty] = useState<Property | null>(null);
-  const showcaseVideoSrc = property?.id === 1 ? showcaseVideo : null;
+  const numericPropertyId = Number(id);
+  const [allProperties, setAllProperties] = useState<Property[]>(() => getCachedPublicProperties());
+  const [property, setProperty] = useState<Property | null>(() => {
+    if (!Number.isFinite(numericPropertyId)) {
+      return null;
+    }
+
+    return getCachedPublicProperties().find((entry) => entry.id === numericPropertyId) ?? null;
+  });
+  const [isPropertyLoading, setIsPropertyLoading] = useState(() => !Number.isFinite(numericPropertyId) ? false : !getCachedPublicProperties().some((entry) => entry.id === numericPropertyId));
+  const propertyVideoSrc = property?.videoUrl?.trim() || null;
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const mediaItems: MediaItem[] = property
-    ? [
-        ...(showcaseVideoSrc ? [{ kind: "video" as const, src: showcaseVideoSrc }] : []),
-        ...property.gallery.map((image) => ({ kind: "image" as const, src: image })),
-      ]
-    : [];
+  const coverImage = property?.image?.trim() ?? "";
+  const galleryImages = useMemo(
+    () => property?.gallery.filter((image): image is string => Boolean(image && image.trim())) ?? [],
+    [property]
+  );
+  const mediaItems: MediaItem[] = useMemo(
+    () => {
+      if (!property) {
+        return [];
+      }
+
+      if (propertyVideoSrc) {
+        return [{ kind: "video" as const, src: propertyVideoSrc }];
+      }
+
+      return (galleryImages.length ? galleryImages : coverImage ? [coverImage] : []).map((image) => ({
+        kind: "image" as const,
+        src: image,
+      }));
+    },
+    [property, propertyVideoSrc, galleryImages, coverImage]
+  );
   const [activeMedia, setActiveMedia] = useState<MediaItem>(
-    showcaseVideoSrc ? { kind: "video", src: showcaseVideoSrc } : { kind: "image", src: property?.image ?? "" }
+    propertyVideoSrc
+      ? { kind: "video", src: propertyVideoSrc }
+      : galleryImages[0]
+        ? { kind: "image", src: galleryImages[0] }
+        : { kind: "image", src: coverImage }
   );
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [userProfile, setUserProfile] = useState({
+    fullName: "",
+    email: "",
+    phone: "",
+  });
   const [formState, setFormState] = useState({
     fullName: "",
     email: "",
@@ -43,7 +101,32 @@ export function PropertyDetail() {
     message: property ? `Bonjour, je souhaite organiser une visite pour ${property.title}.` : "",
   });
   const [submitMessage, setSubmitMessage] = useState("");
+  const [submitMessageKind, setSubmitMessageKind] = useState<"info" | "success" | "error">("info");
+  const [successPulse, setSuccessPulse] = useState(false);
+  const [isActiveVideoBroken, setIsActiveVideoBroken] = useState(false);
   const activeMediaIndex = mediaItems.findIndex((item) => item.kind === activeMedia.kind && item.src === activeMedia.src);
+
+  const applyAuthUser = (user: any | null) => {
+    if (!user) {
+      setIsLoggedIn(false);
+      setUserProfile({ fullName: "", email: "", phone: "" });
+      return;
+    }
+
+    const metadata = user.user_metadata ?? {};
+    const fullName = String(metadata.full_name ?? metadata.name ?? metadata.fullName ?? "");
+    const email = String(user.email ?? metadata.email ?? "");
+    const phone = String(metadata.phone ?? metadata.phone_number ?? metadata.phoneNumber ?? "");
+
+    setIsLoggedIn(true);
+    setUserProfile({ fullName, email, phone });
+    setFormState((current) => ({
+      ...current,
+      fullName: current.fullName || fullName,
+      email: current.email || email,
+      phone: current.phone || phone,
+    }));
+  };
 
   const handleContactClick = (type: "whatsapp" | "call") => {
     if (!isLoggedIn) {
@@ -70,45 +153,102 @@ export function PropertyDetail() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  const mapProperty = useCallback((item: any): Property => ({
+    id: Number(item.id ?? 0),
+    title: String(item.title ?? "Annonce immobilière"),
+    price: Number(item.price ?? 0),
+    transactionType: item.transaction_type === "Location" ? "Location" : "Vente",
+    location: String(item.location ?? "Emplacement non précisé"),
+    mapLocationQuery: item.map_location_query ? String(item.map_location_query) : undefined,
+    nearbyCommodities: Array.isArray(item.nearby_commodities) ? item.nearby_commodities : [],
+    bedrooms: Number(item.bedrooms ?? 0),
+    bathrooms: Number(item.bathrooms ?? 0),
+    area: Number(item.area ?? 0),
+    type: String(item.type ?? "Bien immobilier"),
+    image: String(item.image ?? ""),
+    gallery: Array.isArray(item.gallery) ? item.gallery : [],
+    videoUrl: item.video_url ? String(item.video_url) : undefined,
+    description: String(item.description ?? ""),
+    features: Array.isArray(item.features) ? item.features : [],
+    tags: Array.isArray(item.tags) ? item.tags : [],
+    featured: Boolean(item.featured),
+  }), []);
+
+  const loadPropertyData = useCallback(async (showLoader = true) => {
+    const propertyId = Number(id);
+
+    if (showLoader && !property) {
+      setIsPropertyLoading(true);
+    }
+
+    try {
+      const publicRows = await getPublicPropertiesAsync({ forceRefresh: false });
+      setAllProperties(publicRows);
+
+      if (!Number.isFinite(propertyId)) {
+        setProperty(null);
+        return;
+      }
+
+      try {
+        const item = await getProperty(propertyId, { forceRefresh: false });
+        const mappedItem = mapProperty(item);
+        const fromPublic = publicRows.find((entry) => Number(entry.id) === propertyId) ?? null;
+
+        setProperty({
+          ...(fromPublic ?? mappedItem),
+          ...mappedItem,
+          videoUrl: mappedItem.videoUrl || fromPublic?.videoUrl,
+          image: mappedItem.image || fromPublic?.image || "",
+          gallery: mappedItem.gallery?.length ? mappedItem.gallery : fromPublic?.gallery ?? [],
+        });
+      } catch {
+        const fromPublic = publicRows.find((entry) => Number(entry.id) === propertyId) ?? property ?? null;
+        setProperty(fromPublic);
+      }
+    } catch {
+      if (!property) {
+        const cachedProperty = Number.isFinite(propertyId)
+          ? getCachedPublicProperties().find((entry) => entry.id === propertyId) ?? null
+          : null;
+        setAllProperties((current) => current.length ? current : getCachedPublicProperties());
+        setProperty(cachedProperty);
+      }
+    } finally {
+      setIsPropertyLoading(false);
+    }
+  }, [id, mapProperty, property]);
+
   useEffect(() => {
-    const mapProperty = (item: Awaited<ReturnType<typeof getProperties>>["data"][number]): Property => ({
-      id: item.id,
-      title: item.title,
-      price: item.price,
-      transactionType: item.transaction_type,
-      location: item.location,
-      mapLocationQuery: item.map_location_query,
-      nearbyCommodities: item.nearby_commodities,
-      bedrooms: item.bedrooms,
-      bathrooms: item.bathrooms,
-      area: item.area,
-      type: item.property_type,
-      image: item.cover_image_url,
-      gallery: item.gallery_urls,
-      description: item.description ?? "",
-      features: item.features ?? [],
-      tags: item.tags ?? [],
-      featured: item.featured,
+    loadPropertyData(true);
+  }, [loadPropertyData]);
+
+  useEffect(() => {
+    const handleFocusRefresh = () => {
+      loadPropertyData(false);
+    };
+
+    const unsubscribe = subscribeToPropertiesRealtime(() => {
+      loadPropertyData(false);
     });
 
-    getProperties({ limit: 8 })
-      .then((res) => setAllProperties(res.data.map(mapProperty)))
-      .catch(() => setAllProperties([]));
-
-    if (id) {
-      getProperty(Number(id))
-        .then((item) => setProperty(mapProperty(item)))
-        .catch(() => setProperty(null));
-    }
-  }, [id]);
+    window.addEventListener("focus", handleFocusRefresh);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("focus", handleFocusRefresh);
+    };
+  }, [loadPropertyData]);
 
   useEffect(() => {
     const fetchUser = async () => {
-      const { data: { user } } = await import("../../lib/supabase").then(m => m.supabase.auth.getUser());
-      setIsLoggedIn(!!user);
+      const { data: { user } } = await supabase.auth.getUser();
+      applyAuthUser(user);
     };
     fetchUser();
-    const { data: listener } = require("../../lib/supabase").supabase.auth.onAuthStateChange(fetchUser);
+    const { data: listener } = supabase.auth.onAuthStateChange(async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      applyAuthUser(user);
+    });
     return () => {
       listener.subscription.unsubscribe();
     };
@@ -117,15 +257,15 @@ export function PropertyDetail() {
   useEffect(() => {
     if (!loginModalOpen) return;
     const fetchUser = async () => {
-      const { data: { user } } = await import("../../lib/supabase").then(m => m.supabase.auth.getUser());
+      const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        setIsLoggedIn(true);
+        applyAuthUser(user);
         setLoginModalOpen(false);
         setIsContactModalOpen(true);
       }
     };
     fetchUser();
-    const { data: listener } = require("../../lib/supabase").supabase.auth.onAuthStateChange(fetchUser);
+    const { data: listener } = supabase.auth.onAuthStateChange(fetchUser);
     return () => {
       listener.subscription.unsubscribe();
     };
@@ -136,16 +276,38 @@ export function PropertyDetail() {
       return;
     }
 
-    setActiveMedia(showcaseVideoSrc ? { kind: "video", src: showcaseVideoSrc } : { kind: "image", src: property.image });
+    if (mediaItems.length) {
+      setActiveMedia(mediaItems[0]);
+    } else {
+      setActiveMedia({ kind: "image", src: coverImage });
+    }
+    setIsActiveVideoBroken(false);
     setIsFavorite(getFavoriteIds().includes(property.id));
     setFormState({
-      fullName: "",
-      email: "",
-      phone: "",
+      fullName: isLoggedIn ? userProfile.fullName : "",
+      email: isLoggedIn ? userProfile.email : "",
+      phone: isLoggedIn ? userProfile.phone : "",
       message: `Bonjour, je souhaite organiser une visite pour ${property.title}.`,
     });
     setSubmitMessage("");
-  }, [property, showcaseVideoSrc]);
+    setSubmitMessageKind("info");
+    setSuccessPulse(false);
+  }, [property, mediaItems, coverImage, isLoggedIn, userProfile.email, userProfile.fullName, userProfile.phone]);
+
+  if (isPropertyLoading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <div className="flex-grow flex items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+            <p className="text-slate-600">Chargement de la propriété...</p>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   if (!property) {
     return (
@@ -197,27 +359,45 @@ export function PropertyDetail() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!formState.fullName || !formState.email || !formState.phone) {
+    if (isLoggedIn && !formState.phone) {
+      setSubmitMessageKind("error");
+      setSubmitMessage("Merci d'ajouter votre numéro de téléphone avant d'envoyer la demande.");
+      return;
+    }
+
+    if (!isLoggedIn && (!formState.fullName || !formState.email || !formState.phone)) {
+      setSubmitMessageKind("error");
       setSubmitMessage("Merci de compléter votre nom, email et téléphone avant d'envoyer la demande.");
       return;
     }
 
-    await createInquiry({
-      property_id: property.id,
-      property_title: property.title,
-      full_name: formState.fullName,
-      email: formState.email,
-      phone: formState.phone,
-      message: formState.message,
-    });
+    try {
+      await createVisit({
+        inquiry_id: Date.now(),
+        property_id: property.id,
+        property_title: property.title,
+        visitor_name: isLoggedIn ? (userProfile.fullName || formState.fullName || "Utilisateur connecté") : formState.fullName,
+        visitor_email: isLoggedIn ? (userProfile.email || formState.email || "utilisateur-connecte@journal-immobilier.tn") : formState.email,
+        visitor_phone: formState.phone,
+        requested_date: formState.message,
+      });
 
-    setSubmitMessage("Votre demande a été enregistrée. L'agence peut maintenant vous recontacter avec toutes les informations nécessaires.");
-    setFormState({
-      fullName: "",
-      email: "",
-      phone: "",
-      message: `Bonjour, je souhaite organiser une visite pour ${property.title}.`,
-    });
+      setSubmitMessageKind("success");
+      setSubmitMessage("Demande envoyée. Un conseiller vous contacte très vite pour confirmer votre visite.");
+      setSuccessPulse(true);
+      window.setTimeout(() => setSuccessPulse(false), 1400);
+      window.dispatchEvent(new CustomEvent("visit-request-created"));
+
+      setFormState({
+        fullName: isLoggedIn ? userProfile.fullName : "",
+        email: isLoggedIn ? userProfile.email : "",
+        phone: isLoggedIn ? userProfile.phone : "",
+        message: `Bonjour, je souhaite organiser une visite pour ${property.title}.`,
+      });
+    } catch {
+      setSubmitMessageKind("error");
+      setSubmitMessage("Impossible d'envoyer la demande pour le moment. Réessayez dans quelques instants.");
+    }
   };
 
   const valuationMin = Math.round(property.price * 0.95);
@@ -251,6 +431,18 @@ export function PropertyDetail() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <style>{`
+        @keyframes visitSuccessPop {
+          0% { opacity: 0; transform: translateY(10px) scale(0.98); }
+          70% { opacity: 1; transform: translateY(0) scale(1.01); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes visitButtonPulse {
+          0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.35); }
+          100% { box-shadow: 0 0 0 20px rgba(22, 163, 74, 0); }
+        }
+      `}</style>
       <Header />
       
       <section className="bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_62%,#f3f6fb_100%)] pt-6 pb-8">
@@ -266,43 +458,49 @@ export function PropertyDetail() {
           <div className="grid gap-6 lg:grid-cols-[1.65fr_0.95fr]">
             <div className="rounded-[28px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
               <div className="relative h-[380px] overflow-hidden rounded-[20px] bg-white border border-slate-200/40 md:h-[480px]">
-                {activeMedia.kind === "video" ? (
+                {activeMedia.kind === "video" && !isActiveVideoBroken ? (
                   <video
-                    className="h-full w-full object-contain"
+                    key={activeMedia.src}
+                    src={activeMedia.src}
+                    className="h-full w-full object-contain bg-black"
                     autoPlay
                     loop
                     muted
                     playsInline
                     controls
-                    preload="metadata"
-                    poster={property.image}
+                    preload="auto"
+                    onError={() => setIsActiveVideoBroken(true)}
                   >
-                    <source src={activeMedia.src} type="video/mp4" />
+                    Votre navigateur ne peut pas lire cette vidéo.
                   </video>
                 ) : (
                   <ImageWithFallback
-                    src={activeMedia.src}
+                    src={activeMedia.kind === "image" ? activeMedia.src : coverImage || galleryImages[0] || property.image}
                     alt={property.title}
                     className="h-full w-full object-contain"
                   />
                 )}
 
-                <button
-                  type="button"
-                  onClick={handlePrevImage}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/95 backdrop-blur-sm p-3 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50"
-                  aria-label="Image précédente"
-                >
-                  <ChevronLeft className="h-6 w-6" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNextImage}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/95 backdrop-blur-sm p-3 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50"
-                  aria-label="Image suivante"
-                >
-                  <ChevronRight className="h-6 w-6" />
-                </button>
+                {mediaItems.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handlePrevImage}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/95 backdrop-blur-sm p-3 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50"
+                      aria-label="Image précédente"
+                    >
+                      <ChevronLeft className="h-6 w-6" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNextImage}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/95 backdrop-blur-sm p-3 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50"
+                      aria-label="Image suivante"
+                    >
+                      <ChevronRight className="h-6 w-6" />
+                    </button>
+                  </>
+                )}
                 {activeMedia.kind === "image" && (
                   <button
                     type="button"
@@ -314,34 +512,42 @@ export function PropertyDetail() {
                   </button>
                 )}
 
+                {activeMedia.kind === "video" && isActiveVideoBroken && (
+                  <div className="absolute left-4 top-4 rounded-full bg-black/65 px-3 py-1 text-xs font-semibold text-white">
+                    Vidéo indisponible
+                  </div>
+                )}
+
                 <div className="absolute bottom-4 right-4 rounded-[10px] bg-black/40 backdrop-blur-sm px-4 py-2 text-sm font-semibold text-white border border-white/20">
                   {Math.max(1, activeMediaIndex + 1)} / {mediaItems.length}
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-2.5 overflow-x-auto rounded-[16px] bg-gradient-to-r from-slate-100 to-slate-50 p-3 border border-slate-200/50">
-                {mediaItems.map((item, index) => (
-                  <button
-                    key={`${item.kind}-${item.src}-${index}`}
-                    type="button"
-                    onClick={() => setActiveMedia(item)}
-                    className={`h-16 w-24 shrink-0 overflow-hidden rounded-[12px] border transition-all duration-200 ${
-                      activeMedia.kind === item.kind && activeMedia.src === item.src ? "border-sky-400 ring-2 ring-sky-300/40 shadow-lg" : "border-slate-300 hover:border-slate-400 hover:shadow-md"
-                    }`}
-                  >
-                    {item.kind === "video" ? (
-                      <div className="relative h-full w-full bg-slate-800">
-                        <ImageWithFallback src={property.image} alt={`${property.title} video`} className="h-full w-full object-cover opacity-70" />
-                        <span className="absolute inset-0 flex items-center justify-center text-white">
-                          <PlayCircle className="h-6 w-6" />
-                        </span>
-                      </div>
-                    ) : (
-                      <ImageWithFallback src={item.src} alt={property.title} className="h-full w-full object-cover" />
-                    )}
-                  </button>
-                ))}
-              </div>
+              {mediaItems.length > 1 && (
+                <div className="mt-4 flex items-center gap-2.5 overflow-x-auto rounded-[16px] bg-gradient-to-r from-slate-100 to-slate-50 p-3 border border-slate-200/50">
+                  {mediaItems.map((item, index) => (
+                    <button
+                      key={`${item.kind}-${item.src}-${index}`}
+                      type="button"
+                      onClick={() => setActiveMedia(item)}
+                      className={`h-16 w-24 shrink-0 overflow-hidden rounded-[12px] border transition-all duration-200 ${
+                        activeMedia.kind === item.kind && activeMedia.src === item.src ? "border-sky-400 ring-2 ring-sky-300/40 shadow-lg" : "border-slate-300 hover:border-slate-400 hover:shadow-md"
+                      }`}
+                    >
+                      {item.kind === "video" ? (
+                        <div className="relative h-full w-full bg-slate-800">
+                          <ImageWithFallback src={property.image} alt={`${property.title} video`} className="h-full w-full object-cover opacity-70" />
+                          <span className="absolute inset-0 flex items-center justify-center text-white">
+                            <PlayCircle className="h-6 w-6" />
+                          </span>
+                        </div>
+                      ) : (
+                        <ImageWithFallback src={item.src} alt={property.title} className="h-full w-full object-cover" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
@@ -371,6 +577,7 @@ export function PropertyDetail() {
                     navigator.share({ title: property.title, url }).catch(() => {});
                   } else {
                     navigator.clipboard.writeText(url).catch(() => {});
+                    setSubmitMessageKind("info");
                     setSubmitMessage("Le lien de l'annonce a été copié.");
                   }
                 }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 font-semibold text-slate-700 transition hover:border-slate-300">
@@ -383,6 +590,7 @@ export function PropertyDetail() {
                     return;
                   }
                   await createReport({ property_id: property.id, reason: "wrong_info", description: `Signalement depuis la fiche ${property.title}` }).catch(() => {});
+                  setSubmitMessageKind("info");
                   setSubmitMessage("Le signalement a été envoyé à l'administrateur.");
                 }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 font-semibold text-slate-700 transition hover:border-slate-300">
                   <Flag className="h-4 w-4" />
@@ -403,13 +611,6 @@ export function PropertyDetail() {
                 <h3 className="mt-5 text-lg font-semibold text-slate-900">{property.title}</h3>
                 <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-slate-500"><MapPin className="h-4 w-4" /> {displayLocation}</p>
 
-                <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-1">Propriétaire</p>
-                  <p className={`text-base font-semibold text-slate-900 transition-all duration-300 ${!isLoggedIn ? "blur-sm select-none" : ""}`}>
-                    Ahmed Ben Salah
-                  </p>
-                </div>
-
                 <div className="mt-6 grid grid-cols-2 gap-3">
                   <button type="button" onClick={() => handleContactClick("whatsapp")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 font-semibold text-emerald-700 transition hover:bg-emerald-100">
                     <MessageCircle className="h-4 w-4" /> WhatsApp
@@ -417,6 +618,29 @@ export function PropertyDetail() {
                   <button type="button" onClick={() => handleContactClick("call")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-50 px-4 py-3 font-semibold text-sky-700 transition hover:bg-sky-100">
                     <PhoneCall className="h-4 w-4" /> Appeler
                   </button>
+                </div>
+              </div>
+
+              <div className="rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 shadow-[0_18px_42px_rgba(15,23,42,0.08)]">
+                <p className="text-sm font-semibold text-slate-900">Suivez nos pages pour plus d'informations</p>
+                <div className="mt-4 flex items-center justify-center gap-4">
+                  {companySocialLinks.map((item) => (
+                    <a
+                      key={item.label}
+                      href={item.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full transition duration-200 hover:-translate-y-0.5"
+                      aria-label={item.label}
+                      title={item.label}
+                    >
+                      <img
+                        src={item.logoSrc}
+                        alt={item.label}
+                        className="h-9 w-9 object-contain"
+                      />
+                    </a>
+                  ))}
                 </div>
               </div>
             </div>
@@ -482,17 +706,38 @@ export function PropertyDetail() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-[32px] p-8 shadow-lg">
-                <h2 className="text-xl font-semibold text-black mb-4">Caractéristiques & Équipements</h2>
-                <div className="grid grid-cols-2 gap-3">
-                  {property.features.map((feature, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <div className="bg-blue-100 rounded-full p-1">
-                        <Check className="h-4 w-4 text-blue-600" />
-                      </div>
-                      <span className="text-gray-700">{feature}</span>
+              <div className="grid gap-6 xl:grid-cols-2">
+                <div className="bg-white rounded-[32px] p-8 shadow-lg">
+                  <h2 className="text-xl font-semibold text-black mb-4">Caractéristiques du bien</h2>
+                  {property.features.length ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {property.features.map((feature, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <div className="bg-blue-100 rounded-full p-1">
+                            <Check className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <span className="text-gray-700">{feature}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <p className="text-sm text-slate-500">Aucune caractéristique supplémentaire renseignée pour ce bien.</p>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-[32px] p-8 shadow-lg">
+                  <h2 className="text-xl font-semibold text-black mb-4">Équipements & confort</h2>
+                  {property.tags.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {property.tags.map((item) => (
+                        <span key={item} className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-sm font-semibold text-sky-800">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">Aucun équipement particulier n'a été renseigné.</p>
+                  )}
                 </div>
               </div>
 
@@ -523,91 +768,57 @@ export function PropertyDetail() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-[32px] p-8 shadow-lg">
-                <h2 className="text-3xl font-semibold text-slate-950">Estimation du bien</h2>
-                <p className="mt-1 text-slate-500">Prédiction assistée par IA (module à connecter)</p>
-
-                <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/70 p-6">
-                  <div className="relative h-24">
-                    <div className="absolute left-0 right-0 top-11 h-[3px] rounded-full bg-slate-300" />
-
-                    <div
-                      className="absolute top-0 -translate-x-1/2"
-                      style={{ left: `${valuationPosition}%` }}
-                    >
-                      <div className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white shadow-lg">
-                        Ce bien: {formatCompactCurrency(property.price)}
-                      </div>
-                      <div className="mt-1 flex justify-center text-sky-700">
-                        <Home className="h-5 w-5" />
-                      </div>
-                    </div>
-
-                    <div className="absolute left-0 top-[54px] text-sm text-slate-700">
-                      <p className="font-semibold">{formatCompactCurrency(valuationMin)}</p>
-                      <p className="text-slate-500">Minimum</p>
-                    </div>
-                    <div className="absolute right-0 top-[54px] text-right text-sm text-slate-700">
-                      <p className="font-semibold">{formatCompactCurrency(valuationMax)}</p>
-                      <p className="text-slate-500">Maximum</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-sky-50 px-4 py-3">
-                    <p className="inline-flex items-center gap-2 text-slate-700">
-                      <Sparkles className="h-4 w-4 text-sky-700" />
-                      Cette fourchette est basée sur des biens similaires dans cette zone.
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-600">Utile ?</span>
-                      <button type="button" className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition hover:text-slate-800">
-                        <ThumbsUp className="h-4 w-4" />
-                      </button>
-                      <button type="button" className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition hover:text-slate-800">
-                        <ThumbsDown className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-[32px] p-8 shadow-lg sticky top-28">
+              <div className="sticky top-28 rounded-[32px] border border-sky-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-8 shadow-[0_18px_38px_rgba(15,23,42,0.12)]">
                 <div className="mb-6 flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-100">
                     <CalendarDays className="h-6 w-6 text-sky-700" />
                   </div>
                   <div>
                     <h3 className="text-xl font-semibold text-black">Planifier une visite</h3>
-                    <p className="text-sm text-slate-500">La demande est sauvegardée dans le navigateur.</p>
+                    <p className="text-sm text-slate-500">
+                      {isLoggedIn
+                        ? "Vous êtes connecté. Renseignez votre téléphone pour confirmer la visite."
+                        : "Renseignez vos coordonnées pour recevoir une proposition de créneau."}
+                    </p>
                   </div>
                 </div>
                 <form className="space-y-4" onSubmit={handleSubmit}>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nom Complet
-                    </label>
-                    <input
-                      type="text"
-                      value={formState.fullName}
-                      onChange={(event) => setFormState((current) => ({ ...current, fullName: event.target.value }))}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      placeholder="Jean Dupont"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={formState.email}
-                      onChange={(event) => setFormState((current) => ({ ...current, email: event.target.value }))}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      placeholder="jean@exemple.fr"
-                    />
-                  </div>
+                  {isLoggedIn && (
+                    <div className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                      Compte connecté
+                    </div>
+                  )}
+                  {!isLoggedIn && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Nom Complet
+                        </label>
+                        <input
+                          type="text"
+                          value={formState.fullName}
+                          onChange={(event) => setFormState((current) => ({ ...current, fullName: event.target.value }))}
+                          className="w-full rounded-xl border border-slate-300 px-4 py-2.5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          placeholder="Jean Dupont"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          value={formState.email}
+                          onChange={(event) => setFormState((current) => ({ ...current, email: event.target.value }))}
+                          className="w-full rounded-xl border border-slate-300 px-4 py-2.5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          placeholder="jean@exemple.fr"
+                        />
+                      </div>
+                    </>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Téléphone
@@ -616,32 +827,44 @@ export function PropertyDetail() {
                       type="tel"
                       value={formState.phone}
                       onChange={(event) => setFormState((current) => ({ ...current, phone: event.target.value }))}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                       placeholder="+216 20 123 456"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Message
+                      Message (optionnel)
                     </label>
                     <textarea
                       rows={4}
                       value={formState.message}
                       onChange={(event) => setFormState((current) => ({ ...current, message: event.target.value }))}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                       placeholder="Je suis intéressé par cette propriété..."
                     ></textarea>
                   </div>
                   {submitMessage && (
-                    <div className="rounded-2xl bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                    <div
+                      className={`rounded-2xl px-4 py-3 text-sm ${{
+                        success: "border border-emerald-200 bg-emerald-50 text-emerald-800",
+                        error: "border border-rose-200 bg-rose-50 text-rose-700",
+                        info: "border border-sky-200 bg-sky-50 text-sky-800",
+                      }[submitMessageKind]}`}
+                      style={submitMessageKind === "success" ? { animation: "visitSuccessPop 560ms ease both" } : undefined}
+                    >
                       {submitMessage}
                     </div>
                   )}
                   <button
                     type="submit"
-                    className="w-full bg-sky-700 text-white py-3 rounded-lg font-semibold hover:bg-sky-800 transition-colors"
+                    className={`w-full rounded-xl py-3 font-semibold text-white transition-all ${
+                      successPulse
+                        ? "bg-emerald-600 hover:bg-emerald-700"
+                        : "bg-sky-700 hover:bg-sky-800"
+                    }`}
+                    style={successPulse ? { animation: "visitButtonPulse 900ms ease-out" } : undefined}
                   >
-                    Demander des Informations
+                    {successPulse ? "Demande envoyée" : "Envoyer ma demande de visite"}
                   </button>
                 </form>
               </div>

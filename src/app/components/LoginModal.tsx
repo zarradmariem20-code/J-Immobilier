@@ -23,6 +23,29 @@ function deriveNameFromEmail(value: string) {
     .join(" ") || "Utilisateur";
 }
 
+function getProvider(user: any): "email" | "google" | "facebook" {
+  const provider = user?.app_metadata?.provider;
+  const providers = user?.app_metadata?.providers;
+
+  if (provider === "google" || (Array.isArray(providers) && providers.includes("google"))) {
+    return "google";
+  }
+
+  if (provider === "facebook" || (Array.isArray(providers) && providers.includes("facebook"))) {
+    return "facebook";
+  }
+
+  return "email";
+}
+
+function getDisplayName(user: any, fallbackEmail: string) {
+  return user?.user_metadata?.full_name
+    || user?.user_metadata?.name
+    || user?.email
+    || fallbackEmail
+    || "Utilisateur";
+}
+
 export function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [authProfile, setAuthProfile] = useState<AuthProfile | null>(null);
   const [email, setEmail] = useState("");
@@ -31,6 +54,10 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [authError, setAuthError] = useState("");
   const [otpHint, setOtpHint] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [providerAvailability, setProviderAvailability] = useState({
+    google: true,
+    facebook: true,
+  });
 
   const resetForm = () => {
     setEmail("");
@@ -49,6 +76,44 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
     syncAuth();
     window.addEventListener("auth-state-changed", syncAuth);
     return () => window.removeEventListener("auth-state-changed", syncAuth);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProviderAvailability = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/settings`, {
+          headers: {
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const settings = await response.json();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProviderAvailability({
+          google: Boolean(settings?.external?.google),
+          facebook: Boolean(settings?.external?.facebook),
+        });
+      } catch {
+        // Keep the buttons enabled if the settings endpoint is unavailable.
+      }
+    };
+
+    loadProviderAvailability();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -73,23 +138,62 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
   }, [isOpen]);
 
   const handleSocialLogin = async (provider: "google" | "facebook") => {
+    const providerLabel = provider === "facebook" ? "Facebook" : "Google";
+
+    if (!providerAvailability[provider]) {
+      setAuthError(`La connexion ${providerLabel} n'est pas encore active pour cette application.`);
+      return;
+    }
+
     try {
       // Store the current path for post-auth redirect
-      const currentPath = window.location.pathname + window.location.search + window.location.hash;
+      const currentPath = window.location.pathname + window.location.search;
       localStorage.setItem("postAuthRedirect", currentPath);
-      await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: window.location.origin + "/auth-handler",
           queryParams: provider === "google" ? { prompt: "select_account" } : undefined,
+          scopes: provider === "facebook" ? "email public_profile" : undefined,
         },
       });
+
+      if (error) {
+        throw error;
+      }
     } catch (error) {
-      setAuthError("Erreur lors de la connexion avec " + provider + ".");
+      const message = error instanceof Error ? error.message : "";
+
+      if (/provider is not enabled|unsupported provider/i.test(message)) {
+        setAuthError(`La connexion ${providerLabel} n'est pas activée côté serveur.`);
+        return;
+      }
+
+      setAuthError(message
+        ? `Erreur lors de la connexion avec ${providerLabel} : ${message}`
+        : `Erreur lors de la connexion avec ${providerLabel}.`);
     }
   };
 
-  const startOtpFlow = (event: React.FormEvent) => {
+  const requestEmailOtp = async () => {
+    const trimmedEmail = email.trim();
+    const { error } = await supabase.auth.signInWithOtp({
+      email: trimmedEmail,
+      options: {
+        shouldCreateUser: true,
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    setOtpCode("");
+    setOtpStep("otp");
+    setOtpHint(`Un code de verification a ete envoye a ${trimmedEmail}.`);
+  };
+
+  const startOtpFlow = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!isValidEmail(email.trim())) {
@@ -98,12 +202,19 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
     }
 
     setAuthError("");
-    setOtpCode("");
-    setOtpStep("otp");
-    setOtpHint(`Un code de verification a ete envoye a ${email.trim()}.`);
+    setIsLoading(true);
+
+    try {
+      await requestEmailOtp();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setAuthError(message || "Impossible d'envoyer le code OTP pour le moment.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const verifyOtpAndLogin = (event: React.FormEvent) => {
+  const verifyOtpAndLogin = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!/^\d{6}$/.test(otpCode.trim())) {
@@ -114,23 +225,38 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setAuthError("");
     setIsLoading(true);
 
-    setTimeout(() => {
-      setAuthSession({
-        name: authProfile?.name || deriveNameFromEmail(email),
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
         email: email.trim(),
-        provider: "email",
+        token: otpCode.trim(),
+        type: "email",
       });
-      setIsLoading(false);
+
+      if (error) {
+        throw error;
+      }
+
+      const user = data.user ?? data.session?.user;
+      setAuthSession({
+        name: getDisplayName(user, email.trim()) || authProfile?.name || deriveNameFromEmail(email),
+        email: user?.email ?? email.trim(),
+        provider: getProvider(user),
+      });
       onClose();
       resetForm();
-    }, 650);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setAuthError(message || "Code OTP invalide ou expire.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (!isOpen || typeof document === "undefined") return null;
 
   return createPortal((
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-      <div className="w-full max-h-[90vh] max-w-2xl overflow-y-auto rounded-[32px] border border-slate-200 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-h-[90vh] max-w-2xl overflow-y-auto rounded-[32px] border border-slate-200 bg-white shadow-2xl">
         <div className="relative bg-[linear-gradient(180deg,#e8f2ff_0%,#f7faff_100%)] px-6 pb-16 pt-6">
           <button
             onClick={() => {
@@ -171,9 +297,10 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
                 <button
                   type="submit"
-                  className="w-full rounded-[16px] bg-slate-950 px-4 py-3 font-semibold text-white shadow-[0_10px_20px_rgba(2,6,23,0.24)] transition-all duration-200 hover:bg-[linear-gradient(135deg,#020617_0%,#0f172a_58%,#0369a1_100%)]"
+                  disabled={isLoading}
+                  className="w-full rounded-[16px] bg-slate-950 px-4 py-3 font-semibold text-white shadow-[0_10px_20px_rgba(2,6,23,0.24)] transition-all duration-200 hover:bg-[linear-gradient(135deg,#020617_0%,#0f172a_58%,#0369a1_100%)] disabled:opacity-70"
                 >
-                  Continuer
+                  {isLoading ? "Envoi..." : "Continuer"}
                 </button>
 
                 <div className="flex items-center gap-3 pt-1">
@@ -186,7 +313,8 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   <button
                     type="button"
                     onClick={() => handleSocialLogin("google")}
-                    className="inline-flex items-center justify-center gap-2 rounded-[16px] border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 transition hover:border-sky-200 hover:bg-sky-50"
+                    disabled={!providerAvailability.google}
+                    className="inline-flex items-center justify-center gap-2 rounded-[16px] border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 transition hover:border-sky-200 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-sm font-bold text-[#ea4335] shadow-sm">
                       G
@@ -196,14 +324,21 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   <button
                     type="button"
                     onClick={() => handleSocialLogin("facebook")}
-                    className="inline-flex items-center justify-center gap-2 rounded-[16px] border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 transition hover:border-sky-200 hover:bg-sky-50"
+                    disabled={!providerAvailability.facebook}
+                    className="inline-flex items-center justify-center gap-2 rounded-[16px] border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 transition hover:border-sky-200 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#1877f2] text-sm font-bold text-white shadow-sm">
                       <Facebook className="h-3.5 w-3.5 fill-current" />
                     </span>
-                    Facebook
+                    {providerAvailability.facebook ? "Facebook" : "Facebook indisponible"}
                   </button>
                 </div>
+
+                {!providerAvailability.facebook && (
+                  <p className="text-xs font-medium text-amber-600">
+                    Facebook n&apos;est pas encore configuré dans Supabase pour ce projet.
+                  </p>
+                )}
               </form>
             ) : (
               <form onSubmit={verifyOtpAndLogin} className="space-y-4">
@@ -220,7 +355,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                     className="w-full rounded-[16px] border border-slate-300 bg-slate-50 px-4 py-3 text-center text-lg font-semibold tracking-[0.35em] text-slate-950 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
                     placeholder="000000"
                   />
-                  <p className="mt-2 text-xs text-slate-500">Code de test: 123456 (simulation locale)</p>
+                  <p className="mt-2 text-xs text-slate-500">Saisissez le code recu par email pour finaliser la connexion.</p>
                 </div>
 
                 {authError && <p className="text-sm font-semibold text-rose-600">{authError}</p>}
@@ -247,9 +382,17 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setAuthError("");
-                      setOtpHint(`Un nouveau code a ete envoye a ${email.trim()}.`);
+                      setIsLoading(true);
+                      try {
+                        await requestEmailOtp();
+                      } catch (error) {
+                        const message = error instanceof Error ? error.message : "";
+                        setAuthError(message || "Impossible de renvoyer le code OTP.");
+                      } finally {
+                        setIsLoading(false);
+                      }
                     }}
                     className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
                   >

@@ -7,10 +7,10 @@
     "build": "vite build",
     "dev": "vite --host 0.0.0.0 --port 5173",
     "dev:frontend": "vite --host 0.0.0.0 --port 5173",
-    "dev:backend": "npm --prefix backend run dev",
-    "build:backend": "npm --prefix backend run build",
-    "db:migrate": "npm --prefix backend run db:migrate",
-    "db:seed": "npm --prefix backend run db:seed"
+    "dev:backend": "node scripts/run-optional-backend.mjs dev",
+    "build:backend": "node scripts/run-optional-backend.mjs build",
+    "db:migrate": "node scripts/run-optional-backend.mjs db:migrate",
+    "db:seed": "node scripts/run-optional-backend.mjs db:seed"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

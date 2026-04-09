@@ -5,7 +5,6 @@ import { Property } from "../data/properties";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { formatPrice } from "../utils/format";
 import { getFavoriteIds, isUserLoggedIn, toggleFavoriteId } from "../utils/storage";
-import showcaseVideo from "../../assets/AQNXnnPnKdMQ5estjhWkd2IhZaaZUHAtL8ze9gnFvSqh433mUscb0yB9S4Q55Hlyye5VU9-jXyE7nhUVsrLwPLB9rtniZUy_xRrGkMY.mp4";
 
 interface PropertyCardProps {
   property: Property;
@@ -13,11 +12,17 @@ interface PropertyCardProps {
 
 export function PropertyCard({ property }: PropertyCardProps) {
   const [isFavorite, setIsFavorite] = useState(false);
-  const showcaseVideoSrc = property.id === 1 ? showcaseVideo : null;
+  const [isVideoBroken, setIsVideoBroken] = useState(false);
+  const showcaseVideoSrc = property.videoUrl?.trim() || null;
+  const highlightBadges = Array.from(new Set([...(property.tags ?? []), ...(property.features ?? [])])).slice(0, 3);
 
   useEffect(() => {
     setIsFavorite(getFavoriteIds().includes(property.id));
   }, [property.id]);
+
+  useEffect(() => {
+    setIsVideoBroken(false);
+  }, [showcaseVideoSrc]);
 
   const handleFavoriteClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -34,19 +39,25 @@ export function PropertyCard({ property }: PropertyCardProps) {
   return (
     <article className="group overflow-hidden rounded-[28px] border border-white/60 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(15,23,42,0.12)]">
       <div className="relative h-80 overflow-hidden">
-        <Link to={`/property/${property.id}`}>
-          {showcaseVideoSrc ? (
+        <Link to={`/property/${property.id}`} target="_blank" rel="noopener noreferrer">
+          {showcaseVideoSrc && !isVideoBroken ? (
             <video
+              key={showcaseVideoSrc}
+              src={showcaseVideoSrc}
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              poster={property.image}
               autoPlay
               loop
               muted
               playsInline
-              preload="metadata"
+              preload="auto"
+              onError={() => setIsVideoBroken(true)}
             >
-              <source src={showcaseVideoSrc} type="video/mp4" />
+              Votre navigateur ne peut pas lire cette vidéo.
             </video>
+          ) : showcaseVideoSrc ? (
+            <div className="flex h-full w-full items-center justify-center bg-slate-950 text-sm font-semibold text-white">
+              Vidéo indisponible
+            </div>
           ) : (
             <ImageWithFallback
               src={property.image}
@@ -77,7 +88,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
       </div>
       <div className="p-5">
         <div className="mb-1.5 flex items-start justify-between">
-          <Link to={`/property/${property.id}`} className="pr-4">
+          <Link to={`/property/${property.id}`} className="pr-4" target="_blank" rel="noopener noreferrer">
             <h3 className="line-clamp-2 min-h-[3.5rem] text-xl font-semibold leading-tight text-slate-950">{property.title}</h3>
           </Link>
           <p className="shrink-0 whitespace-nowrap text-right text-lg font-bold text-sky-700">
@@ -88,7 +99,16 @@ export function PropertyCard({ property }: PropertyCardProps) {
           <MapPin className="h-4 w-4" />
           <span className="text-sm">{property.location}</span>
         </div>
-        <p className="mb-4 line-clamp-1 text-sm leading-6 text-slate-600">{property.description}</p>
+        <p className="mb-3 line-clamp-1 text-sm leading-6 text-slate-600">{property.description}</p>
+        {highlightBadges.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {highlightBadges.map((badge) => (
+              <span key={badge} className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800">
+                {badge}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex w-full items-center justify-center text-slate-700">
           <div className="flex flex-1 items-center justify-center gap-1.5">
             <Bed className="h-4 w-4" />
@@ -107,6 +127,8 @@ export function PropertyCard({ property }: PropertyCardProps) {
         </div>
         <Link
           to={`/property/${property.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
           className="mt-4 inline-flex items-center rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-sky-200 hover:text-sky-700"
         >
           Voir le détail

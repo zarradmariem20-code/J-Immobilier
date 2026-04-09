@@ -5,10 +5,16 @@ import { PropertyDetail } from "./pages/PropertyDetail";
 import { About } from "./pages/About";
 import { Contact } from "./pages/Contact";
 import { Admin } from "./pages/Admin";
+import { AdminEditListing } from "./pages/AdminEditListing";
 import { SubmitListing } from "./pages/SubmitListing";
 import Account from "./pages/Account";
 import AuthHandler from "./pages/AuthHandler";
 import LoginPage from "./pages/LoginPage";
+import Favorites from "./pages/Favorites";
+import Messages from "./pages/Messages";
+import Notifications from "./pages/Notifications";
+import AccountSettings from "./pages/AccountSettings";
+import LanguageSettings from "./pages/LanguageSettings";
 
 export const router = createBrowserRouter([
       {
@@ -48,7 +54,47 @@ export const router = createBrowserRouter([
     Component: Admin,
   },
   {
+    path: "/admin/dashboard",
+    Component: Admin,
+  },
+  {
+    path: "/admin/listings",
+    Component: Admin,
+  },
+  {
+    path: "/admin/listings/:listingId/edit",
+    Component: AdminEditListing,
+  },
+  {
+    path: "/admin/visits",
+    Component: Admin,
+  },
+  {
+    path: "/admin/checklist",
+    Component: Admin,
+  },
+  {
     path: "/account",
     Component: Account,
+  },
+  {
+    path: "/favorites",
+    Component: Favorites,
+  },
+  {
+    path: "/messages",
+    Component: Messages,
+  },
+  {
+    path: "/account/notifications",
+    Component: Notifications,
+  },
+  {
+    path: "/account/settings",
+    Component: AccountSettings,
+  },
+  {
+    path: "/account/language",
+    Component: LanguageSettings,
   },
 ]);

@@ -24,3 +24,62 @@ html {
 .review-box-animate {
 	animation: reviewBoxPulse 3.8s ease-in-out infinite;
 }
+
+/* Global minimal brand scrollbar */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: #1f5f96 transparent;
+}
+
+*::-webkit-scrollbar {
+	width: 7px;
+	height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+	border-radius: 9999px;
+	background: #1f5f96;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+	background: #174a75;
+}
+
+*::-webkit-scrollbar-button {
+	display: none;
+	width: 0;
+	height: 0;
+}
+
+.modern-scrollbar {
+	scrollbar-width: thin;
+	scrollbar-color: #1f5f96 transparent;
+	scrollbar-gutter: stable;
+}
+
+.modern-scrollbar::-webkit-scrollbar {
+	width: 7px;
+}
+
+.modern-scrollbar::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.modern-scrollbar::-webkit-scrollbar-thumb {
+	border-radius: 9999px;
+	background: #1f5f96;
+}
+
+.modern-scrollbar::-webkit-scrollbar-thumb:hover {
+	background: #174a75;
+}
+
+.modern-scrollbar::-webkit-scrollbar-button {
+	display: none;
+	width: 0;
+	height: 0;
+}

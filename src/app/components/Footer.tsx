@@ -1,6 +1,27 @@
-import { Facebook, Instagram, Twitter, Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin } from "lucide-react";
 import { Link } from "react-router";
 import { BrandLogo } from "./BrandLogo";
+import facebookLogo from "../../assets/Facebook_Logo.png";
+import instagramLogo from "../../assets/insta.avif";
+import tiktokLogo from "../../assets/tiktok-.webp";
+
+const footerSocialLinks = [
+  {
+    label: "Facebook",
+    href: "https://www.facebook.com/profile.php?id=100054570723975&sk=followers",
+    logoSrc: facebookLogo,
+  },
+  {
+    label: "Instagram",
+    href: "https://www.instagram.com/journal_immobilier?igsh=Mzl3eDE2eHZneGlv",
+    logoSrc: instagramLogo,
+  },
+  {
+    label: "TikTok",
+    href: "https://www.tiktok.com/@journal_immo2?is_from_webapp=1&sender_device=pc",
+    logoSrc: tiktokLogo,
+  },
+];
 
 export function Footer() {
   return (
@@ -14,16 +35,24 @@ export function Footer() {
             <p className="max-w-sm text-sm leading-6 text-slate-300">
               Une sélection immobilière tunisienne plus premium, des conseils précis et un accompagnement humain du premier appel jusqu'à la signature.
             </p>
-            <div className="flex gap-4">
-              <a href="#" className="text-slate-400 transition-colors hover:text-sky-300" aria-label="Facebook">
-                <Facebook className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-slate-400 transition-colors hover:text-sky-300" aria-label="Instagram">
-                <Instagram className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-slate-400 transition-colors hover:text-sky-300" aria-label="Twitter">
-                <Twitter className="h-5 w-5" />
-              </a>
+            <div className="flex gap-3">
+              {footerSocialLinks.map((item) => (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block h-11 w-11 overflow-hidden rounded-full transition hover:-translate-y-0.5"
+                  aria-label={item.label}
+                  title={item.label}
+                >
+                  <img
+                    src={item.logoSrc}
+                    alt={item.label}
+                    className="h-6 w-6 object-contain"
+                  />
+                </a>
+              ))}
             </div>
           </div>
 

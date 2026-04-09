@@ -1,7 +1,7 @@
 
 import { Link, useLocation, useNavigate } from "react-router";
-import { LogOut, Menu, Plus, UserRound, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bell, Building2, ChevronDown, Heart, Languages, LogOut, Menu, MessageCircle, Plus, Settings, UserRound, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { BrandLogo } from "./BrandLogo";
 import { LoginModal } from "./LoginModal.tsx";
 import { clearAuthSession } from "../utils/storage";
@@ -16,6 +16,15 @@ export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [authProfile, setAuthProfile] = useState<any>(null);
   const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    clearAuthSession();
+    setAuthProfile(null);
+    navigate("/");
+  };
 
   const handleAddListingClick = () => {
     if (authProfile) {
@@ -48,6 +57,22 @@ export function Header() {
   }, []);
 
   useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    setUserMenuOpen(false);
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
     const fetchUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setAuthProfile(user);
@@ -66,14 +91,16 @@ export function Header() {
 
   // Removed effect that auto-navigates after login. Now, after login, user stays on the same screen.
 
-  const isActive = (path: string) => location.pathname === path;
-  const isHomePage = location.pathname === "/";
-
+  const isActive = (path: string) => {
+    const cleanPath = path.split("?")[0];
+    if (cleanPath === "/") {
+      return location.pathname === "/";
+    }
+    return location.pathname.startsWith(cleanPath);
+  };
   const navLinks = [
-    { path: "/", label: "Accueil" },
-    { path: "/listings", label: "Annonces" },
-    { path: "/about", label: "À Propos" },
-    { path: "/contact", label: "Contact" },
+    { path: "/listings", label: "Annonces", icon: Building2 },
+    { path: "/contact", label: "Contactez nous", icon: MessageCircle },
   ];
   const userName = authProfile?.user_metadata?.full_name || authProfile?.email || "Utilisateur";
   const userInitials = userName
@@ -83,73 +110,117 @@ export function Header() {
     .map((part) => part[0]?.toUpperCase())
     .join("") || "JI";
   const avatarUrl = authProfile?.user_metadata?.avatar_url || null;
+
+  const userMenuItems = [
+    { label: "Notifications", path: "/account/notifications", icon: Bell },
+    { label: "Favoris", path: "/favorites", icon: Heart },
+    { label: "Messages", path: "/messages", icon: MessageCircle },
+    { label: "Profils", path: "/account", icon: UserRound },
+    { type: "divider" as const },
+    { label: "Parametres du compte", path: "/account/settings", icon: Settings },
+    { label: "Langue", path: "/account/language", icon: Languages },
+  ];
+
+  const handleMenuSignOut = async () => {
+    await handleSignOut();
+    setUserMenuOpen(false);
+    setMobileMenuOpen(false);
+  };
+
   return (
     <>
       <header
-        style={{ zoom: "110%" }}
-        className={`sticky top-0 z-50 transition-all duration-300 ${
-          isScrolled
-            ? "border-b border-sky-100/70 bg-[linear-gradient(180deg,rgba(219,234,254,0.72)_0%,rgba(239,246,255,0.46)_100%)] backdrop-blur-xl supports-[backdrop-filter]:bg-sky-50/45"
-            : "border-b border-transparent bg-transparent backdrop-blur-0"
+        className={`sticky top-0 z-50 border-b border-slate-200 border-t-2 border-t-[#1f5f96] bg-white/95 backdrop-blur-xl transition-all duration-300 ${
+          isScrolled ? "shadow-[0_8px_30px_rgba(15,23,42,0.08)]" : "shadow-none"
         }`}
       >
-        <div className={isHomePage ? "max-w-7xl mx-auto px-0 sm:px-2 lg:px-4" : "mx-auto max-w-7xl px-2 sm:px-4 lg:px-6"}>
-          <div className={isHomePage ? "grid min-h-10 grid-cols-[auto_1fr_auto] items-center gap-3 py-0" : "grid min-h-[78px] grid-cols-[auto_1fr_auto] items-center gap-4 py-2"}>
-            <div className={isHomePage ? "-ml-5 sm:-ml-7 lg:-ml-8" : "-ml-3 sm:-ml-4 lg:-ml-5"}>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex min-h-[92px] items-center gap-6">
+            <div className="flex-shrink-0">
               <BrandLogo compact={false} />
             </div>
 
-            <div className="hidden justify-center lg:flex">
-              <nav className={`flex flex-nowrap items-center gap-2 rounded-full border border-sky-100/80 bg-white/60 shadow-sm whitespace-nowrap ${isHomePage ? "px-3 py-1" : "px-4 py-2"}`}>
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  className={`rounded-full text-sm font-medium transition-all ${isHomePage ? "px-4 py-1" : "px-5 py-2"} ${
-                    isActive(link.path)
-                      ? "bg-slate-950 text-white shadow-lg shadow-slate-950/15"
-                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
-                  }`}
+            <div className="hidden flex-1 items-center justify-end lg:flex">
+              <nav className="flex items-center whitespace-nowrap">
+                <button
+                  type="button"
+                  onClick={handleAddListingClick}
+                  className="inline-flex items-center gap-2 rounded-full border border-[#1f5f96] bg-[#eef5fb] px-4 py-2 text-sm font-semibold text-[#1f5f96] transition hover:bg-[#1f5f96] hover:text-white"
                 >
-                  {link.label}
-                </Link>
-              ))}
-              </nav>
-            </div>
+                  <Plus className="h-4 w-4" />
+                  Publier
+                </button>
 
-            <div className="hidden items-center justify-end gap-2 md:flex">
-              <button
-                type="button"
-                onClick={handleAddListingClick}
-                className={`inline-flex items-center gap-2 rounded-full border border-slate-300 bg-transparent text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 ${isHomePage ? "px-4 py-1" : "px-5 py-2"}`}
-              >
-                <Plus className="h-4 w-4" />
-                Ajouter mon annonce
-              </button>
-              {authProfile ? (
-                <>
-                  <Link to="/account" className="flex items-center gap-2 group">
+                {navLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <Link
+                      key={link.label}
+                      to={link.path}
+                      className={`ml-6 inline-flex items-center gap-2 text-[15px] font-medium transition-colors ${
+                        isActive(link.path) ? "text-[#1f5f96]" : "text-slate-600 hover:text-[#1f5f96]"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4 text-[#1f5f96]" />
+                      <span>{link.label}</span>
+                    </Link>
+                  );
+                })}
+
+                {authProfile ? (
+                <div className="relative ml-10" ref={userMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setUserMenuOpen((prev) => !prev)}
+                    className="inline-flex items-center gap-2 text-[15px] font-medium text-slate-600 transition hover:text-[#1f5f96]"
+                  >
                     {avatarUrl ? (
                       <img src={avatarUrl} alt="avatar" className="h-8 w-8 rounded-full object-cover border border-slate-300" />
                     ) : (
-                      <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-950 text-xs font-bold text-white shadow-sm">
-                        {userInitials}
+                      <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#eef5fb] text-[#1f5f96]">
+                        <UserRound className="h-4 w-4" />
                       </div>
                     )}
-                    <span className="font-semibold text-slate-900 group-hover:underline max-w-[120px] truncate">{userName}</span>
-                  </Link>
-                  <button
-                    onClick={async () => {
-                      await supabase.auth.signOut();
-                      setAuthProfile(null);
-                      navigate("/");
-                    }}
-                    className={`inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 text-sm font-semibold text-slate-700 transition hover:border-rose-200 hover:text-rose-600 ${isHomePage ? "px-3 py-1" : "px-4 py-2"}`}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Deconnexion
+                    <span className="max-w-[120px] truncate">{userName}</span>
+                    <ChevronDown className={`h-4 w-4 transition ${userMenuOpen ? "rotate-180" : "rotate-0"}`} />
                   </button>
-                </>
+
+                  {userMenuOpen && (
+                    <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_20px_45px_rgba(15,23,42,0.14)]">
+                      {userMenuItems.map((item, index) => {
+                        if ("type" in item && item.type === "divider") {
+                          return <div key={`divider-${index}`} className="my-2 h-px bg-slate-200" />;
+                        }
+
+                        const Icon = item.icon;
+                        return (
+                          <button
+                            key={item.path}
+                            type="button"
+                            onClick={() => {
+                              navigate(item.path);
+                              setUserMenuOpen(false);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                        );
+                      })}
+
+                      <div className="my-2 h-px bg-slate-200" />
+                      <button
+                        type="button"
+                        onClick={handleMenuSignOut}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Deconnexion
+                      </button>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <button
                   onClick={() => {
@@ -157,23 +228,24 @@ export function Header() {
                     setModalMode("login");
                     setLoginModalOpen(true);
                   }}
-                  className={`inline-flex items-center gap-2 rounded-full border border-sky-100/80 bg-white/60 text-sm font-semibold text-slate-900 shadow-sm transition hover:border-sky-200 hover:text-sky-700 cursor-pointer ${isHomePage ? "px-4 py-1" : "px-5 py-2"}`}
+                  className="ml-10 inline-flex items-center gap-2 text-[15px] font-medium text-slate-600 transition hover:text-[#1f5f96] cursor-pointer"
                 >
-                  <UserRound className="h-4 w-4" />
+                  <UserRound className="h-4 w-4 text-[#1f5f96]" />
                   Se connecter
                 </button>
               )}
+              </nav>
             </div>
 
             <button
-              className="rounded-full border border-slate-200 p-2 md:hidden"
+              className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[#8db1d2] bg-[#eef5fb] p-0 text-[#1f5f96] shadow-sm lg:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Ouvrir le menu"
             >
               {mobileMenuOpen ? (
-                <X className="h-6 w-6" />
+                <X className="h-5 w-5" />
               ) : (
-                <Menu className="h-6 w-6" />
+                <Menu className="h-5 w-5" />
               )}
             </button>
           </div>
@@ -184,7 +256,7 @@ export function Header() {
             <nav className="flex flex-col px-4 py-4">
               {navLinks.map((link) => (
                 <Link
-                  key={link.path}
+                  key={`${link.label}-${link.path}`}
                   to={link.path}
                   className={`rounded-2xl px-4 py-3 transition-colors ${
                     isActive(link.path)
@@ -207,19 +279,42 @@ export function Header() {
                 <Plus className="h-4 w-4" />
                 Ajouter mon annonce
               </button>
+
               {authProfile ? (
                 <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                  <div className="flex justify-center">
+                  <div className="mb-3 flex items-center gap-2">
                     <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-sm font-bold text-white">
                       {userInitials}
                     </div>
+                    <p className="max-w-[220px] truncate text-sm font-semibold text-slate-900">{userName}</p>
                   </div>
+
+                  {userMenuItems.map((item, index) => {
+                    if ("type" in item && item.type === "divider") {
+                      return <div key={`mobile-divider-${index}`} className="my-2 h-px bg-slate-200" />;
+                    }
+
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.path}
+                        type="button"
+                        onClick={() => {
+                          navigate(item.path);
+                          setMobileMenuOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+
+                  <div className="my-2 h-px bg-slate-200" />
                   <button
-                    onClick={() => {
-                      clearAuthSession();
-                      setMobileMenuOpen(false);
-                    }}
-                    className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-700"
+                    onClick={handleMenuSignOut}
+                    className="w-full inline-flex items-center justify-start gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
                   >
                     <LogOut className="h-4 w-4" />
                     Deconnexion
