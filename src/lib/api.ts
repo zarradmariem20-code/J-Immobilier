@@ -291,6 +291,11 @@ async function getPropertiesFromBackend(limit?: number, includeArchived = false)
     "Le chargement des annonces via le backend a expiré."
   );
 
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error("Réponse backend invalide: JSON attendu.");
+  }
+
   let payload: any = null;
   try {
     payload = await response.json();
@@ -302,7 +307,11 @@ async function getPropertiesFromBackend(limit?: number, includeArchived = false)
     throw new Error(payload?.error || "Echec de chargement des annonces via le backend.");
   }
 
-  return Array.isArray(payload?.data) ? payload.data : [];
+  if (!Array.isArray(payload?.data)) {
+    throw new Error("Réponse backend invalide: données manquantes.");
+  }
+
+  return payload.data;
 }
 
 // Create an inquiry (contact request) for a property
