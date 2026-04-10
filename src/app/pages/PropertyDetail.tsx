@@ -619,23 +619,23 @@ export function PropertyDetail() {
                 </div>
               </div>
 
-              <div className="rounded-[20px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-[0_18px_42px_rgba(15,23,42,0.08)] sm:rounded-[24px] sm:p-5">
-                <p className="text-xs font-semibold text-slate-900 sm:text-sm">Suivez nos pages pour plus d'informations</p>
-                <div className="mt-3 flex items-center justify-center gap-2 sm:mt-4 sm:gap-4">
+              <div className="rounded-[18px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.06)] sm:rounded-[24px] sm:p-5">
+                <p className="text-[11px] font-semibold leading-4 text-slate-900 sm:text-sm">Suivez nos pages pour plus d'informations</p>
+                <div className="mt-2.5 flex items-center justify-center gap-2 sm:mt-4 sm:gap-4">
                   {companySocialLinks.map((item) => (
                     <a
                       key={item.label}
                       href={item.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full transition duration-200 hover:-translate-y-0.5 sm:h-16 sm:w-16"
+                      className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full transition duration-200 hover:-translate-y-0.5 sm:h-16 sm:w-16"
                       aria-label={item.label}
                       title={item.label}
                     >
                       <img
                         src={item.logoSrc}
                         alt={item.label}
-                        className="h-7 w-7 object-contain sm:h-9 sm:w-9"
+                        className="h-6 w-6 object-contain sm:h-9 sm:w-9"
                       />
                     </a>
                   ))}
