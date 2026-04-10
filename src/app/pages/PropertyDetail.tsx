@@ -548,8 +548,8 @@ export function PropertyDetail() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 lg:sticky lg:top-24 lg:self-start lg:grid-cols-1 lg:gap-4">
-              <div className="col-span-2 grid grid-cols-3 gap-2">
+            <div className="space-y-3 lg:sticky lg:top-24 lg:self-start lg:space-y-4">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={async () => {
@@ -619,26 +619,31 @@ export function PropertyDetail() {
                 </div>
               </div>
 
-              <div className="rounded-[18px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.06)] sm:rounded-[24px] sm:p-5">
-                <p className="text-[11px] font-semibold leading-4 text-slate-900 sm:text-sm">Suivez nos pages pour plus d'informations</p>
-                <div className="mt-2.5 flex items-center justify-center gap-2 sm:mt-4 sm:gap-4">
-                  {companySocialLinks.map((item) => (
-                    <a
-                      key={item.label}
-                      href={item.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full transition duration-200 hover:-translate-y-0.5 sm:h-16 sm:w-16"
-                      aria-label={item.label}
-                      title={item.label}
-                    >
-                      <img
-                        src={item.logoSrc}
-                        alt={item.label}
-                        className="h-6 w-6 object-contain sm:h-9 sm:w-9"
-                      />
-                    </a>
-                  ))}
+              <div className="rounded-[18px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-[0_12px_28px_rgba(15,23,42,0.06)] sm:rounded-[24px] sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700 sm:text-xs">Suivez-nous</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm">Retrouvez l'agence sur Facebook, Instagram et TikTok.</p>
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    {companySocialLinks.map((item) => (
+                      <a
+                        key={item.label}
+                        href={item.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white transition duration-200 hover:-translate-y-0.5 hover:border-sky-200 sm:h-11 sm:w-11"
+                        aria-label={item.label}
+                        title={item.label}
+                      >
+                        <img
+                          src={item.logoSrc}
+                          alt={item.label}
+                          className="h-5 w-5 object-contain sm:h-6 sm:w-6"
+                        />
+                      </a>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
