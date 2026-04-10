@@ -548,8 +548,8 @@ export function PropertyDetail() {
               )}
             </div>
 
-            <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
-              <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-3 lg:sticky lg:top-24 lg:self-start lg:grid-cols-1 lg:gap-4">
+              <div className="col-span-2 grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={async () => {
@@ -596,46 +596,46 @@ export function PropertyDetail() {
                 </button>
               </div>
 
-              <div className="rounded-[24px] border border-slate-200 bg-white p-5 sm:p-6 shadow-[0_18px_42px_rgba(15,23,42,0.08)]">
-                <p className="text-3xl font-bold text-slate-950 sm:text-4xl">{formatPrice(property.price, property.transactionType)}</p>
-                <p className="mt-1 text-sm text-slate-500">{property.type} • {displayLocation}</p>
+              <div className="rounded-[20px] border border-slate-200 bg-white p-3 shadow-[0_18px_42px_rgba(15,23,42,0.08)] sm:rounded-[24px] sm:p-6">
+                <p className="text-2xl font-bold leading-none text-slate-950 sm:text-4xl">{formatPrice(property.price, property.transactionType)}</p>
+                <p className="mt-1 text-xs text-slate-500 sm:text-sm">{property.type} • {displayLocation}</p>
 
-                <div className="mt-5 flex flex-wrap items-center gap-3 border-y border-slate-200 py-4 text-slate-700 sm:gap-4">
-                  <span className="inline-flex items-center gap-1.5 text-sm"><Bed className="h-4 w-4" /> {property.bedrooms} Ch.</span>
-                  <span className="inline-flex items-center gap-1.5 text-sm"><Bath className="h-4 w-4" /> {property.bathrooms} SdB</span>
-                  <span className="inline-flex items-center gap-1.5 text-sm"><Maximize className="h-4 w-4" /> {property.area} m²</span>
+                <div className="mt-4 grid gap-2 border-y border-slate-200 py-3 text-slate-700 sm:mt-5 sm:flex sm:flex-wrap sm:items-center sm:gap-4 sm:py-4">
+                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm"><Bed className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {property.bedrooms} Ch.</span>
+                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm"><Bath className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {property.bathrooms} SdB</span>
+                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm"><Maximize className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {property.area} m²</span>
                 </div>
 
-                <h3 className="mt-5 text-lg font-semibold text-slate-900">{property.title}</h3>
-                <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-slate-500"><MapPin className="h-4 w-4" /> {displayLocation}</p>
+                <h3 className="mt-4 text-base font-semibold text-slate-900 sm:mt-5 sm:text-lg">{property.title}</h3>
+                <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-500 sm:text-sm"><MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {displayLocation}</p>
 
-                <div className="mt-6 grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => handleContactClick("whatsapp")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 font-semibold text-emerald-700 transition hover:bg-emerald-100">
+                <div className="mt-4 grid grid-cols-1 gap-2 sm:mt-6 sm:grid-cols-2 sm:gap-3">
+                  <button type="button" onClick={() => handleContactClick("whatsapp")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:px-4 sm:py-3">
                     <MessageCircle className="h-4 w-4" /> WhatsApp
                   </button>
-                  <button type="button" onClick={() => handleContactClick("call")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-50 px-4 py-3 font-semibold text-sky-700 transition hover:bg-sky-100">
+                  <button type="button" onClick={() => handleContactClick("call")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-50 px-3 py-2.5 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 sm:px-4 sm:py-3">
                     <PhoneCall className="h-4 w-4" /> Appeler
                   </button>
                 </div>
               </div>
 
-              <div className="rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 shadow-[0_18px_42px_rgba(15,23,42,0.08)]">
-                <p className="text-sm font-semibold text-slate-900">Suivez nos pages pour plus d'informations</p>
-                <div className="mt-4 flex items-center justify-center gap-4">
+              <div className="rounded-[20px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-[0_18px_42px_rgba(15,23,42,0.08)] sm:rounded-[24px] sm:p-5">
+                <p className="text-xs font-semibold text-slate-900 sm:text-sm">Suivez nos pages pour plus d'informations</p>
+                <div className="mt-3 flex items-center justify-center gap-2 sm:mt-4 sm:gap-4">
                   {companySocialLinks.map((item) => (
                     <a
                       key={item.label}
                       href={item.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full transition duration-200 hover:-translate-y-0.5"
+                      className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full transition duration-200 hover:-translate-y-0.5 sm:h-16 sm:w-16"
                       aria-label={item.label}
                       title={item.label}
                     >
                       <img
                         src={item.logoSrc}
                         alt={item.label}
-                        className="h-9 w-9 object-contain"
+                        className="h-7 w-7 object-contain sm:h-9 sm:w-9"
                       />
                     </a>
                   ))}
