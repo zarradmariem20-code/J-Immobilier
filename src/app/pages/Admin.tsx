@@ -98,7 +98,6 @@ export function Admin() {
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   const [adminSession, setAdminSessionState] = useState<AdminSession | null>(getAdminSession());
-  const [loginEmail, setLoginEmail] = useState("admin@tawla.tn");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -439,8 +438,8 @@ export function Admin() {
   const handleAdminLogin = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (loginEmail.trim().toLowerCase() !== ADMIN_EMAIL || loginPassword !== ADMIN_PASSWORD) {
-      setLoginError("Identifiants admin invalides.");
+    if (loginPassword !== ADMIN_PASSWORD) {
+      setLoginError("Mot de passe admin invalide.");
       return;
     }
 
@@ -1458,22 +1457,12 @@ export function Admin() {
           <p className="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">Admin Only</p>
           <h1 className="mt-2 font-serif text-3xl text-slate-950 sm:text-4xl">Connexion admin</h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            Espace sécurisé de modération des annonces clients. Seul l'administrateur peut approuver la publication.
+            Espace sécurisé de modération des annonces clients. Saisissez uniquement le mot de passe administrateur pour continuer.
           </p>
 
           <form className="mt-6 space-y-4" onSubmit={handleAdminLogin}>
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Email admin</label>
-              <input
-                type="email"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                required
-                className="w-full rounded-[16px] border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Mot de passe</label>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Mot de passe admin</label>
               <input
                 type="password"
                 value={loginPassword}
