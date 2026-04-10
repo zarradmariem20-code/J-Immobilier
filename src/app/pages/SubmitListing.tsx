@@ -543,17 +543,17 @@ export function SubmitListing() {
   };
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col bg-[#f4f7fb]">
+    <div className="min-h-screen flex flex-col bg-[#f4f7fb]">
       <Header />
 
-      <section className="flex-1 overflow-y-auto py-3">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <section className="flex-1 py-4 sm:py-5">
+        <div className="mx-auto max-w-6xl px-3 sm:px-6">
           {!authProfile ? (
-            <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center shadow-sm">
+            <div className="rounded-2xl border border-sky-100 bg-white p-6 text-center shadow-sm sm:p-8">
               <div className="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">
                 <LockKeyhole className="h-6 w-6" />
               </div>
-              <h2 className="font-serif text-2xl text-slate-900">Connexion requise</h2>
+              <h2 className="font-serif text-2xl text-slate-900 sm:text-3xl">Connexion requise</h2>
               <p className="mt-2 text-sm text-slate-500">
                 Connectez-vous pour acceder au formulaire de depot d'annonce.
               </p>
@@ -566,20 +566,20 @@ export function SubmitListing() {
               </button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
               {formError && (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
                   {formError}
                 </div>
               )}
 
-              <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex items-start gap-3">
+              <div className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1f5f96] text-white shadow-sm">
                     <Building2 className="h-5 w-5" />
                   </div>
                   <div className="flex-1">
-                    <h2 className="text-xl font-bold text-slate-900">Publier une annonce immobiliere</h2>
+                    <h2 className="text-lg font-bold text-slate-900 sm:text-xl">Publier une annonce immobiliere</h2>
                     <p className="mt-1 text-sm text-slate-500">
                       Votre annonce sera envoyee pour validation avant d'etre visible sur le site.
                     </p>
@@ -602,7 +602,7 @@ export function SubmitListing() {
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      placeholder="Ex: 12 345 678"
+                      placeholder="Ex : 97 222 822"
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
                     />
                   </div>
@@ -928,7 +928,7 @@ export function SubmitListing() {
                         <label className="text-xs font-semibold text-slate-600">Photos du bien</label>
                         <span className="text-xs text-slate-400">{photos.length} / 7</span>
                       </div>
-                      <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
                         {photoPreviews.map((src, i) => (
                           <div key={i} className="group relative aspect-square overflow-hidden rounded-xl border border-[#d9e6f2] bg-slate-100">
                             <img src={src} alt={`photo ${i + 1}`} className="h-full w-full object-cover" />
@@ -987,18 +987,18 @@ export function SubmitListing() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <div className="flex flex-col-reverse gap-3 rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-end">
                 <button
                   type="button"
                   onClick={() => navigate(-1)}
-                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 sm:w-auto"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   disabled={isLoading || Boolean(submissionReceipt)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#0369a1_0%,#2563eb_100%)] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:brightness-110 disabled:opacity-60"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#0369a1_0%,#2563eb_100%)] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:brightness-110 disabled:opacity-60 sm:w-auto"
                 >
                   {submissionReceipt ? "Envoyee ✓" : isLoading ? "Envoi en cours..." : "Envoyer pour validation"}
                 </button>
@@ -1010,11 +1010,11 @@ export function SubmitListing() {
 
       {submissionReceipt && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[28px] border border-emerald-100 bg-white p-6 shadow-[0_28px_60px_rgba(15,23,42,0.22)]">
+          <div className="w-full max-w-lg rounded-[28px] border border-emerald-100 bg-white p-5 shadow-[0_28px_60px_rgba(15,23,42,0.22)] sm:p-6">
             <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
               <CheckCircle2 className="h-8 w-8" />
             </div>
-            <h2 className="mt-4 font-serif text-3xl text-slate-950">Annonce envoyee avec succes</h2>
+            <h2 className="mt-4 font-serif text-2xl text-slate-950 sm:text-3xl">Annonce envoyee avec succes</h2>
             <p className="mt-2 text-slate-600">
               Votre annonce a bien ete transmise pour validation. Elle sera publiee sur le site apres verification.
             </p>

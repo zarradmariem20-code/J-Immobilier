@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { Bed, Bath, Heart, Maximize, MapPin } from "lucide-react";
+import { Bed, Bath, Heart, Maximize, MapPin, PlayCircle } from "lucide-react";
 import { Property } from "../data/properties";
-import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { formatPrice } from "../utils/format";
 import { getFavoriteIds, isUserLoggedIn, toggleFavoriteId } from "../utils/storage";
 
@@ -38,7 +37,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
 
   return (
     <article className="group overflow-hidden rounded-[28px] border border-white/60 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(15,23,42,0.12)]">
-      <div className="relative h-80 overflow-hidden">
+      <div className="relative h-64 overflow-hidden sm:h-80">
         <Link to={`/property/${property.id}`} target="_blank" rel="noopener noreferrer">
           {showcaseVideoSrc && !isVideoBroken ? (
             <video
@@ -49,21 +48,16 @@ export function PropertyCard({ property }: PropertyCardProps) {
               loop
               muted
               playsInline
-              preload="auto"
+              preload="metadata"
               onError={() => setIsVideoBroken(true)}
             >
               Votre navigateur ne peut pas lire cette vidéo.
             </video>
-          ) : showcaseVideoSrc ? (
-            <div className="flex h-full w-full items-center justify-center bg-slate-950 text-sm font-semibold text-white">
-              Vidéo indisponible
-            </div>
           ) : (
-            <ImageWithFallback
-              src={property.image}
-              alt={property.title}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-            />
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-slate-950 px-4 text-center text-sm font-semibold text-white">
+              <PlayCircle className="h-8 w-8 text-sky-300" />
+              <span>Vidéo indisponible</span>
+            </div>
           )}
         </Link>
         <div className="absolute inset-x-0 top-0 flex items-start justify-between p-4">
@@ -86,7 +80,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
           </button>
         </div>
       </div>
-      <div className="p-5">
+      <div className="p-4 sm:p-5">
         <div className="mb-1.5 flex items-start justify-between">
           <Link to={`/property/${property.id}`} className="pr-4" target="_blank" rel="noopener noreferrer">
             <h3 className="line-clamp-2 min-h-[3.5rem] text-xl font-semibold leading-tight text-slate-950">{property.title}</h3>

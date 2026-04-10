@@ -2,8 +2,17 @@
 @import './tailwind.css';
 @import './theme.css';
 
-html {
-	zoom: 90%;
+html,
+body,
+#root {
+	width: 100%;
+	overflow-x: hidden;
+}
+
+@media (min-width: 1440px) {
+	html {
+		zoom: 90%;
+	}
 }
 
 @keyframes reviewBoxPulse {

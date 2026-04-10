@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
 import { PropertyCard } from "../components/PropertyCard";
-import { BadgeDollarSign, Bath, BedDouble, Building2, ChevronDown, House, KeyRound, LandPlot, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ArrowLeft, BadgeDollarSign, Bath, BedDouble, Building2, ChevronDown, House, KeyRound, LandPlot, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import type { Property } from "../data/properties";
 import { getCachedPublicProperties, getPublicPropertiesAsync, hasCachedPublicProperties } from "../utils/publicListings";
 import { subscribeToPropertiesRealtime } from "../../lib/api";
@@ -335,9 +335,16 @@ export function Listings() {
 
       <section className="bg-[linear-gradient(135deg,#0f172a_0%,#0f3d63_55%,#0ea5e9_100%)] py-8 text-white sm:py-18">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Link
+            to="/"
+            className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Retour à l'accueil
+          </Link>
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-200 sm:text-sm sm:tracking-[0.28em]">Catalogue premium</p>
-          <h1 className="mb-2 mt-2 font-serif text-[52px] font-semibold leading-[0.95] sm:mt-3 sm:mb-4 sm:text-5xl">Annonces immobilières</h1>
-          <p className="max-w-3xl text-base leading-7 text-sky-100 sm:text-lg">
+          <h1 className="mb-2 mt-2 font-serif text-[34px] font-semibold leading-[1.02] sm:mt-3 sm:mb-4 sm:text-5xl">Annonces immobilières</h1>
+          <p className="max-w-3xl text-sm leading-6 text-sky-100 sm:text-lg sm:leading-7">
             Recherche, tri et filtrage réunis sur une même vue pour le marché tunisien, avec sélection vente ou location.
           </p>
         </div>

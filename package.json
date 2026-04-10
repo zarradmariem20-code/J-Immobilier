@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite --host 0.0.0.0 --port 5173",
+    "dev": "node scripts/start-dev.mjs",
     "dev:frontend": "vite --host 0.0.0.0 --port 5173",
     "dev:backend": "node scripts/run-optional-backend.mjs dev",
     "build:backend": "node scripts/run-optional-backend.mjs build",

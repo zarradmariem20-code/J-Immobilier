@@ -1,6 +1,7 @@
 import { Mail, Phone, MapPin } from "lucide-react";
 import { Link } from "react-router";
 import { BrandLogo } from "./BrandLogo";
+import { companyOfficeAddress, companyPhoneDisplay } from "../utils/company";
 import facebookLogo from "../../assets/Facebook_Logo.png";
 import instagramLogo from "../../assets/insta.avif";
 import tiktokLogo from "../../assets/tiktok-.webp";
@@ -42,14 +43,14 @@ export function Footer() {
                   href={item.href}
                   target="_blank"
                   rel="noreferrer"
-                  className="block h-11 w-11 overflow-hidden rounded-full transition hover:-translate-y-0.5"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 p-2 transition hover:-translate-y-0.5 hover:bg-white/10"
                   aria-label={item.label}
                   title={item.label}
                 >
                   <img
                     src={item.logoSrc}
                     alt={item.label}
-                    className="h-6 w-6 object-contain"
+                    className="h-full w-full rounded-full object-cover"
                   />
                 </a>
               ))}
@@ -97,11 +98,11 @@ export function Footer() {
             <ul className="space-y-3">
               <li className="flex items-start gap-2 text-sm text-slate-400">
                 <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <span>Les Berges du Lac 1, Tunis, Tunisie</span>
+                <span>{companyOfficeAddress}</span>
               </li>
               <li className="flex items-center gap-2 text-sm text-slate-400">
                 <Phone className="h-4 w-4 flex-shrink-0" />
-                <span>+216 71 123 456</span>
+                <span>{companyPhoneDisplay}</span>
               </li>
               <li className="flex items-center gap-2 text-sm text-slate-400">
                 <Mail className="h-4 w-4 flex-shrink-0" />

@@ -181,7 +181,7 @@ export function Home() {
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.38)_0%,rgba(2,6,23,0.72)_100%)]" />
         </div>
 
-        <div className="relative z-10 mx-auto flex min-h-[430px] max-w-6xl flex-col items-center justify-center px-4 py-12 sm:px-6 lg:min-h-[480px] lg:px-8">
+        <div className="relative z-10 mx-auto flex min-h-[360px] max-w-6xl flex-col items-center justify-center px-4 py-8 sm:px-6 sm:py-12 lg:min-h-[480px] lg:px-8">
           <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full bg-white p-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.28)]">
             {[
               { value: "Vente", label: "À vendre", icon: BadgeDollarSign },
@@ -212,7 +212,7 @@ export function Home() {
 
           <form
             onSubmit={handleSearch}
-            className="relative z-[120] mt-6 grid w-full max-w-4xl gap-2 rounded-[22px] bg-white/95 p-2.5 shadow-[0_22px_60px_rgba(15,23,42,0.28)] backdrop-blur-md lg:grid-cols-[1.4fr_1fr_auto]"
+            className="relative z-[120] mt-5 grid w-full max-w-4xl gap-2 rounded-[18px] bg-white/95 p-2 shadow-[0_22px_60px_rgba(15,23,42,0.28)] backdrop-blur-md sm:mt-6 sm:rounded-[22px] sm:p-2.5 lg:grid-cols-[1.4fr_1fr_auto]"
           >
             <label className={fieldCardClass}>
               <span className={fieldLabelClass}>Où ?</span>
@@ -328,9 +328,9 @@ export function Home() {
       <section className="py-18">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
-            <article className="relative overflow-hidden rounded-[34px] border border-slate-200 bg-[linear-gradient(145deg,#0f172a_0%,#0f3d63_64%,#0ea5e9_100%)] p-8 text-white shadow-[0_24px_60px_rgba(15,23,42,0.28)]">
+            <article className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(145deg,#0f172a_0%,#0f3d63_64%,#0ea5e9_100%)] p-5 text-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] sm:rounded-[34px] sm:p-8">
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-200">Propriétaire en Tunisie</p>
-              <h3 className="mt-3 max-w-2xl font-serif text-5xl leading-[1.1]">Publiez votre bien et recevez des demandes qualifiées</h3>
+              <h3 className="mt-3 max-w-2xl font-serif text-3xl leading-[1.1] sm:text-4xl lg:text-5xl">Publiez votre bien et recevez des demandes qualifiées</h3>
               <p className="mt-4 max-w-2xl text-sky-100">
                 Déposez votre annonce en quelques étapes, ajoutez vos médias et laissez l'équipe valider avant mise en ligne.
               </p>
@@ -350,9 +350,9 @@ export function Home() {
             </article>
 
             <div className="grid auto-rows-fr gap-6">
-              <article className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm">
+              <article className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:rounded-[30px] sm:p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.26em] text-sky-700">Espace client</p>
-                <h3 className="mt-3 font-serif text-3xl leading-tight text-slate-950">À vendre ou à louer avec un suivi simple</h3>
+                <h3 className="mt-3 font-serif text-2xl leading-tight text-slate-950 sm:text-3xl">À vendre ou à louer avec un suivi simple</h3>
                 <p className="mt-3 text-sm leading-6 text-slate-600">
                   Connectez-vous pour sauvegarder vos favoris, comparer les biens et organiser vos visites.
                 </p>
@@ -427,10 +427,10 @@ export function Home() {
                 </div>
               </div>
             </div>
-            <div className="relative z-10 flex min-h-[300px] h-full flex-col rounded-[30px] bg-slate-950 p-7 text-white shadow-[0_24px_64px_rgba(15,23,42,0.16)] lg:h-[316px]">
+            <div className="relative z-10 flex min-h-[260px] h-full flex-col rounded-[24px] bg-slate-950 p-5 text-white shadow-[0_24px_64px_rgba(15,23,42,0.16)] sm:rounded-[30px] sm:p-7 lg:h-[316px]">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-300">À propos & contact</p>
-                <h2 className="mt-3 font-serif text-[36px] font-semibold leading-[1.08]">Découvrez l'agence et échangez directement avec notre équipe.</h2>
+                <h2 className="mt-3 font-serif text-[28px] font-semibold leading-[1.08] sm:text-[36px]">Découvrez l'agence et échangez directement avec notre équipe.</h2>
                 <p className="mt-4 max-w-2xl text-slate-300">
                   Consultez notre approche, notre présence sur le marché tunisien et contactez-nous facilement pour poser une question, demander un accompagnement ou préparer votre projet immobilier.
                 </p>

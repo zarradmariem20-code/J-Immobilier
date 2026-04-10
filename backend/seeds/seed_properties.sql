@@ -259,4 +259,41 @@ INSERT INTO properties (
   ARRAY['Parking', 'Balcon', 'Lumineux', 'Ascenseur'],
   ARRAY['Montfleury', 'Résidentiel', 'Balcon'],
   false
+),
+
+(
+  'Villa à vendre à Khézema Est',
+  0,
+  'Vente',
+  'Khézema Est, Sousse',
+  'Khezema Est Sousse',
+  ARRAY['Bouhsina', 'Écoles', 'Commerces', 'Pharmacie'],
+  4, 2, 584, 'Villa',
+  'https://images.unsplash.com/photo-1600596542815-ffad4c69c321?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080',
+  ARRAY[
+    'https://images.unsplash.com/photo-1600596542815-ffad4c69c321?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080',
+    'https://images.unsplash.com/photo-1600585154526-990dced4db0d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080'
+  ],
+  'Villa à vendre à Khézema Est, Sousse, d''une superficie de 584 m². Pour plus d''informations, contactez-nous au +216 97 222 822 ou au +216 27 037 037.',
+  ARRAY['Grande superficie', 'Quartier résidentiel', 'Bon emplacement'],
+  ARRAY['Khézema Est', 'Sousse', '584 m²'],
+  true
+),
+
+(
+  'Bureau à vendre au centre-ville de Sousse',
+  250000,
+  'Vente',
+  'Centre-ville, Sousse',
+  'Résidence Selten Centre-ville Sousse',
+  ARRAY['Résidence sécurisée', 'Commerces', 'Transport', 'Centre-ville'],
+  3, 1, 0, 'Bureau',
+  'https://images.unsplash.com/photo-1497366754035-f200968a6e72?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080',
+  ARRAY[
+    'https://images.unsplash.com/photo-1497366754035-f200968a6e72?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080'
+  ],
+  'Bureau à vendre au centre-ville de Sousse, bon emplacement dans une résidence sécurisée à côté de Résidence Selten. Il se compose d''une réception, de 3 pièces, d''une toilette et dispose d''un titre bleu.',
+  ARRAY['Réception', '3 pièces', 'Toilette', 'Titre bleu', 'Résidence sécurisée'],
+  ARRAY['Bureau', 'Centre-ville', 'Sousse', 'Bon emplacement'],
+  true
 );

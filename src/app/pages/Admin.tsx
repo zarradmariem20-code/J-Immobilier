@@ -5,15 +5,12 @@ import {
   FileText,
   Clock3,
   Eye,
-  LayoutDashboard,
-  ListChecks,
   LockKeyhole,
   LogOut,
   MoreHorizontal,
   Phone,
   Plus,
   Search,
-  ShieldCheck,
   Sparkles,
   Trash2,
   Check,
@@ -289,12 +286,25 @@ export function Admin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminSession]);
 
-  const activeView: "dashboard" | "listings" | "checklist" | "visits" = useMemo(() => {
+  const activeView: "dashboard" | "listings" | "contracts" | "visits" = useMemo(() => {
     if (location.pathname.startsWith("/admin/listings")) return "listings";
-    if (location.pathname.startsWith("/admin/checklist")) return "checklist";
+    if (location.pathname.startsWith("/admin/contracts") || location.pathname.startsWith("/admin/checklist")) return "contracts";
     if (location.pathname.startsWith("/admin/visits")) return "visits";
-    return "dashboard";
+    return "listings";
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!adminSession) return;
+
+    if (location.pathname === "/admin" || location.pathname.startsWith("/admin/dashboard")) {
+      navigate("/admin/listings", { replace: true });
+      return;
+    }
+
+    if (location.pathname.startsWith("/admin/checklist")) {
+      navigate("/admin/contracts", { replace: true });
+    }
+  }, [adminSession, location.pathname, navigate]);
 
   useEffect(() => {
     if (!(adminSession && activeView === "listings")) return;
@@ -353,7 +363,7 @@ export function Admin() {
     if (showLoader) setVisitsLoading(true);
     try {
       const analyticsWindow = activeView === "visits" ? undefined : visitsWindow;
-      const visitsWindowForList = activeView === "visits" || activeView === "dashboard" ? undefined : analyticsWindow;
+      const visitsWindowForList = activeView === "visits" || activeView === "dashboard" || activeView === "contracts" ? undefined : analyticsWindow;
       const [visitsData, analyticsData] = await Promise.all([
         getVisits({ limit: 100, window: visitsWindowForList }),
         getVisitsAnalytics(analyticsWindow),
@@ -371,7 +381,7 @@ export function Admin() {
 
   // Load and keep visits fresh while the visits tab is active.
   useEffect(() => {
-    const shouldLoadVisits = activeView === "visits" || activeView === "dashboard" || activeView === "listings";
+    const shouldLoadVisits = activeView === "visits" || activeView === "dashboard" || activeView === "listings" || activeView === "contracts";
     if (!(adminSession && shouldLoadVisits)) return;
 
     loadVisitsData(true);
@@ -1440,13 +1450,13 @@ export function Admin() {
 
   if (!adminSession) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_38%,_#f4f7fb_100%)] px-4 py-10">
-        <div className="mx-auto max-w-md rounded-[28px] border border-sky-200/80 bg-white/80 p-8 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md">
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_38%,_#f4f7fb_100%)] px-4 py-8 sm:py-10">
+        <div className="mx-auto max-w-md rounded-[28px] border border-sky-200/80 bg-white/80 p-6 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md sm:p-8">
           <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
             <LockKeyhole className="h-7 w-7" />
           </div>
           <p className="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">Admin Only</p>
-          <h1 className="mt-2 font-serif text-4xl text-slate-950">Connexion admin</h1>
+          <h1 className="mt-2 font-serif text-3xl text-slate-950 sm:text-4xl">Connexion admin</h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             Espace sécurisé de modération des annonces clients. Seul l'administrateur peut approuver la publication.
           </p>
@@ -1478,7 +1488,7 @@ export function Admin() {
               type="submit"
               className="w-full rounded-[16px] bg-[linear-gradient(135deg,#020617_0%,#0f172a_58%,#0369a1_100%)] px-4 py-3 font-semibold text-white shadow-[0_10px_20px_rgba(2,6,23,0.24)] transition hover:brightness-110"
             >
-              Ouvrir le dashboard admin
+              Ouvrir l'espace admin
             </button>
           </form>
 
@@ -1512,10 +1522,9 @@ export function Admin() {
   const weeklySeries = trafficSeries;
 
   const sidebarItems = [
-    { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, path: "/admin/dashboard" },
     { key: "listings", label: "Annonces", icon: Clock3, path: "/admin/listings" },
     { key: "visits", label: "Visites", icon: CalendarDays, path: "/admin/visits" },
-    { key: "checklist", label: "Checklist", icon: ListChecks, path: "/admin/checklist" },
+    { key: "contracts", label: "Contrats", icon: FileText, path: "/admin/contracts" },
   ] as const;
 
   return (
@@ -1526,7 +1535,7 @@ export function Admin() {
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-      <div className="mx-auto flex w-full max-w-[112rem] gap-5 px-4 py-5 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[112rem] flex-col gap-5 px-4 py-4 sm:px-6 sm:py-5 lg:flex-row lg:px-8">
         <aside className="hidden min-h-[calc(100vh-2.5rem)] w-[250px] flex-col justify-between rounded-[22px] border border-sky-200/80 bg-white/72 px-4 py-4 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md lg:flex">
           <div>
             <div className="flex items-center justify-center rounded-2xl border border-slate-300/40 bg-white/80 px-3 py-3">
@@ -1567,8 +1576,8 @@ export function Admin() {
             <LogOut className="h-5 w-5" />
           </button>
         </aside>
-        <main className="flex-1 space-y-5">
-          <div className="relative overflow-hidden rounded-[28px] border border-sky-200/70 bg-[radial-gradient(circle_at_12%_18%,rgba(125,211,252,0.18),transparent_24%),radial-gradient(circle_at_86%_16%,rgba(56,189,248,0.22),transparent_22%),linear-gradient(135deg,#0f172a_0%,#123d63_42%,#0b6fa4_70%,#0ea5e9_100%)] p-5 text-white shadow-[0_22px_46px_rgba(14,30,60,0.30)] sm:p-6">
+        <main className="w-full flex-1 space-y-4 sm:space-y-5">
+          <div className="relative overflow-hidden rounded-[28px] border border-sky-200/70 bg-[radial-gradient(circle_at_12%_18%,rgba(125,211,252,0.18),transparent_24%),radial-gradient(circle_at_86%_16%,rgba(56,189,248,0.22),transparent_22%),linear-gradient(135deg,#0f172a_0%,#123d63_42%,#0b6fa4_70%,#0ea5e9_100%)] p-4 text-white shadow-[0_22px_46px_rgba(14,30,60,0.30)] sm:p-6">
             <div className="pointer-events-none absolute -left-10 top-16 h-36 w-36 rounded-full bg-cyan-300/12 blur-3xl" />
             <div className="pointer-events-none absolute right-8 top-0 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
             <div className="pointer-events-none absolute -right-16 bottom-2 h-44 w-44 rounded-full bg-sky-300/18 blur-3xl" />
@@ -1579,30 +1588,25 @@ export function Admin() {
               <div className="relative z-10">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-200">Espace administration</p>
                 <h1 className="mt-2 font-serif text-3xl text-white sm:text-4xl">
-                  {activeView === "dashboard" && "Activite de moderation"}
                   {activeView === "listings" && "Moderation des annonces"}
                   {activeView === "visits" && "Gestion des visites immobilières"}
-                  {activeView === "checklist" && "Checklist et regles admin"}
+                  {activeView === "contracts" && "Contrats clients"}
                 </h1>
                 <p className="mt-2 text-sm text-sky-100">Supervision, validation et pilotage des publications en temps reel.</p>
               </div>
-              <div className="relative z-10 flex flex-wrap items-center gap-2">
+              <div className="relative z-10 flex w-full flex-wrap items-center gap-2 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => navigate("/submit-listing")}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/35 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 sm:flex-none"
                 >
                   <Plus className="h-4 w-4" />
                   Ajouter annonce
                 </button>
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/15 px-4 py-2 text-sm font-semibold text-white">
-                  <ShieldCheck className="h-4 w-4" />
-                  {adminSession.email}
-                </div>
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/35 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 sm:flex-none"
                 >
                   <LogOut className="h-4 w-4" />
                   Deconnexion
@@ -1610,6 +1614,33 @@ export function Admin() {
               </div>
             </div>
 
+          </div>
+
+          <div className="lg:hidden">
+            <div className="-mx-1 overflow-x-auto pb-1">
+              <div className="flex min-w-max gap-2 px-1">
+                {sidebarItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = activeView === item.key;
+
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => navigate(item.path)}
+                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition ${
+                        active
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:text-sky-700"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {activeView === "dashboard" && false && (
@@ -2063,8 +2094,8 @@ export function Admin() {
               </div>
             )}
 
-            <div className="mt-4 overflow-visible rounded-2xl border border-slate-200">
-              <table className="w-full border-collapse bg-white text-sm">
+            <div className="mt-4 overflow-x-auto overflow-y-visible rounded-2xl border border-slate-200">
+              <table className="min-w-[760px] w-full border-collapse bg-white text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
                   <tr>
                     <th className="w-12 px-4 py-3 font-semibold">
@@ -2308,13 +2339,13 @@ export function Admin() {
               </div>
 
               {/* Visits Table */}
-              <div className="rounded-[22px] border border-sky-200/80 bg-white/80 p-5 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md">
-                <div className="flex items-center justify-between mb-4">
+              <div className="rounded-[22px] border border-sky-200/80 bg-white/80 p-4 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md sm:p-5">
+                <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Demandes de visite</p>
                     <h3 className="mt-1 text-lg font-semibold text-slate-900">Gestion des visites immobilières</h3>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex w-full flex-col items-stretch gap-3 sm:flex-row sm:items-center lg:w-auto">
                     <div className="relative" ref={visitSortPanelRef}>
                       <button
                         type="button"
@@ -2709,8 +2740,8 @@ export function Admin() {
             </>
           )}
 
-          {activeView === "checklist" && (
-            <section className="rounded-[22px] border border-sky-200/80 bg-white/80 p-5 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md">
+          {activeView === "contracts" && (
+            <section className="rounded-[22px] border border-sky-200/80 bg-white/80 p-4 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md sm:p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Contrats clients</p>
 
               <div className="mt-4 grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">

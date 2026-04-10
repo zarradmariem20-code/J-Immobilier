@@ -20,15 +20,18 @@ function createServiceRoleToken(jwtSecret) {
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const jwtSecret = process.env.SUPABASE_JWT_SECRET;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || (jwtSecret ? createServiceRoleToken(jwtSecret) : process.env.VITE_SUPABASE_ANON_KEY);
 
-if (!supabaseUrl || !jwtSecret) {
-  throw new Error('Missing VITE_SUPABASE_URL or SUPABASE_JWT_SECRET');
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase credentials for upload');
 }
 
-const supabase = createClient(supabaseUrl, createServiceRoleToken(jwtSecret));
-const localPath = 'C:/Users/USER/Downloads/s1 estivale.mp4';
+const supabase = createClient(supabaseUrl, supabaseKey);
+const localPath = process.env.LOCAL_VIDEO_PATH || 'C:/Users/USER/Downloads/s1 estivale.mp4';
+const targetPropertyId = Number.parseInt(process.env.PROPERTY_ID ?? '', 10);
+const storageName = process.env.STORAGE_NAME || localPath.split(/[\\/]/).pop()?.replace(/\s+/g, '-').toLowerCase() || 'listing-video.mp4';
 const dateFolder = new Date().toISOString().slice(0, 10);
-const filePath = `videos/${dateFolder}/${Date.now()}-s1-estivale.mp4`;
+const filePath = `videos/${dateFolder}/${Date.now()}-${storageName}`;
 
 const body = await fs.readFile(localPath);
 const { error } = await supabase.storage.from('listing-media').upload(filePath, body, {
@@ -41,4 +44,18 @@ if (error) {
 }
 
 const { data } = supabase.storage.from('listing-media').getPublicUrl(filePath);
-console.log(data.publicUrl);
+const publicUrl = data.publicUrl;
+console.log(publicUrl);
+
+if (Number.isFinite(targetPropertyId)) {
+  const { error: updateError } = await supabase
+    .from('properties')
+    .update({ video_url: publicUrl })
+    .eq('id', targetPropertyId);
+
+  if (updateError) {
+    console.warn(`DB update skipped for property ${targetPropertyId}: ${updateError.message}`);
+  } else {
+    console.log(`Video attached to property ${targetPropertyId}`);
+  }
+}

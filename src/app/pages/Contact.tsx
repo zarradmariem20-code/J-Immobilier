@@ -3,6 +3,7 @@ import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
 import { Mail, Phone, MapPin, Clock } from "lucide-react";
 import { saveInquiry } from "../utils/storage";
+import { companyOfficeAddressLines, companyOfficeMapQuery, companyPhoneDisplay } from "../utils/company";
 
 export function Contact() {
   const [formState, setFormState] = useState({
@@ -47,24 +48,24 @@ export function Contact() {
     <div className="min-h-screen flex flex-col">
       <Header />
 
-      <section className="bg-[linear-gradient(135deg,#0f172a_0%,#0f3d63_55%,#0ea5e9_100%)] text-white py-18">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-200">Contact</p>
-          <h1 className="mt-3 font-serif text-5xl font-semibold mb-4">Contactez-nous</h1>
-          <p className="text-blue-100 text-lg">
+      <section className="bg-[linear-gradient(135deg,#0f172a_0%,#0f3d63_55%,#0ea5e9_100%)] py-12 text-white sm:py-18">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-200 sm:text-sm">Contact</p>
+          <h1 className="mt-3 mb-4 font-serif text-4xl font-semibold leading-tight sm:text-5xl">Contactez-nous</h1>
+          <p className="max-w-2xl text-base text-blue-100 sm:text-lg">
             Entrez en contact avec notre équipe en Tunisie pour un achat, une location ou une mise en vente
           </p>
         </div>
       </section>
 
-      <section className="py-16 bg-[linear-gradient(180deg,#f8fbff_0%,#f2f6fb_100%)]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            <div className="space-y-8">
+      <section className="bg-[linear-gradient(180deg,#f8fbff_0%,#f2f6fb_100%)] py-10 sm:py-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12">
+            <div className="space-y-6 sm:space-y-8">
               <div>
-                <h2 className="font-serif text-3xl font-semibold text-black mb-6">Entrez en contact</h2>
-                <p className="text-gray-700 mb-8">
-                  Vous avez des questions sur nos propriétés ou services ? Notre équipe est prête à vous assister. 
+                <h2 className="mb-4 font-serif text-2xl font-semibold text-black sm:mb-6 sm:text-3xl">Entrez en contact</h2>
+                <p className="mb-6 text-gray-700 sm:mb-8">
+                  Vous avez des questions sur nos propriétés ou services ? Notre équipe est prête à vous assister.
                   Contactez-nous par l'un des canaux suivants.
                 </p>
               </div>
@@ -77,8 +78,8 @@ export function Contact() {
                   <div>
                     <h3 className="font-semibold text-black mb-1">Adresse du Bureau</h3>
                     <p className="text-gray-600">
-                      Les Berges du Lac 1<br />
-                      Tunis, Tunisie
+                      {companyOfficeAddressLines[0]}<br />
+                      {companyOfficeAddressLines[1]}
                     </p>
                   </div>
                 </div>
@@ -89,7 +90,7 @@ export function Contact() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-black mb-1">Téléphone</h3>
-                    <p className="text-gray-600">+216 71 123 456</p>
+                    <p className="text-gray-600">{companyPhoneDisplay}</p>
                   </div>
                 </div>
 
@@ -119,9 +120,9 @@ export function Contact() {
               </div>
             </div>
 
-            <div className="bg-white rounded-[32px] p-8 shadow-lg">
-              <h2 className="font-serif text-3xl font-semibold text-black mb-6">Envoyez-nous un message</h2>
-              <form className="space-y-6" onSubmit={handleSubmit}>
+            <div className="rounded-[24px] bg-white p-5 shadow-lg sm:rounded-[32px] sm:p-8">
+              <h2 className="mb-5 font-serif text-2xl font-semibold text-black sm:mb-6 sm:text-3xl">Envoyez-nous un message</h2>
+              <form className="space-y-5 sm:space-y-6" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -171,7 +172,7 @@ export function Contact() {
                     value={formState.phone}
                     onChange={(event) => setFormState((current) => ({ ...current, phone: event.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    placeholder="01 23 45 67 89"
+                      placeholder="Ex : 97 222 822"
                   />
                 </div>
 
@@ -219,14 +220,14 @@ export function Contact() {
         </div>
       </section>
 
-      <section className="bg-white py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="font-serif text-3xl font-semibold text-black mb-6 text-center">Visitez notre bureau</h2>
-          <div className="overflow-hidden rounded-[32px] border border-slate-200 shadow-lg">
+      <section className="bg-white py-10 sm:py-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <h2 className="mb-5 text-center font-serif text-2xl font-semibold text-black sm:mb-6 sm:text-3xl">Visitez notre bureau</h2>
+          <div className="overflow-hidden rounded-[24px] border border-slate-200 shadow-lg sm:rounded-[32px]">
             <iframe
               title="Carte du bureau"
-              src="https://www.google.com/maps?q=Les%20Berges%20du%20Lac%201%20Tunis&output=embed"
-              className="h-96 w-full"
+              src={`https://www.google.com/maps?q=${encodeURIComponent(companyOfficeMapQuery)}&output=embed`}
+              className="h-72 w-full sm:h-96"
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
             />

@@ -70,6 +70,10 @@ export const router = createBrowserRouter([
     Component: Admin,
   },
   {
+    path: "/admin/contracts",
+    Component: Admin,
+  },
+  {
     path: "/admin/checklist",
     Component: Admin,
   },

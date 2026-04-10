@@ -18,8 +18,8 @@ export function BrandLogo({ dark = false, compact = false }: BrandLogoProps) {
         alt="Journal Immobilier"
         className={
           compact
-            ? "relative top-[2px] w-60 h-auto max-h-[54px] object-contain [clip-path:inset(2%_0_2%_0)]"
-            : "relative top-[2px] w-[300px] h-auto max-h-[72px] object-contain [clip-path:inset(2%_0_2%_0)] sm:w-[360px] sm:max-h-[82px]"
+            ? "relative top-[2px] h-auto w-40 max-h-[42px] object-contain [clip-path:inset(2%_0_2%_0)] sm:w-52 sm:max-h-[50px] lg:w-60 lg:max-h-[54px]"
+            : "relative top-[2px] h-auto w-[190px] max-h-[52px] object-contain [clip-path:inset(2%_0_2%_0)] sm:w-[260px] sm:max-h-[66px] lg:w-[360px] lg:max-h-[82px]"
         }
       />
     </Link>

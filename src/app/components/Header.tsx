@@ -134,9 +134,9 @@ export function Header() {
           isScrolled ? "shadow-[0_8px_30px_rgba(15,23,42,0.08)]" : "shadow-none"
         }`}
       >
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex min-h-[92px] items-center gap-6">
-            <div className="flex-shrink-0">
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
+          <div className="flex min-h-[74px] items-center gap-3 sm:min-h-[92px] sm:gap-6">
+            <div className="min-w-0 flex-shrink">
               <BrandLogo compact={false} />
             </div>
 
@@ -238,7 +238,7 @@ export function Header() {
             </div>
 
             <button
-              className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[#8db1d2] bg-[#eef5fb] p-0 text-[#1f5f96] shadow-sm lg:hidden"
+              className="ml-auto inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#8db1d2] bg-[#eef5fb] p-0 text-[#1f5f96] shadow-sm sm:h-11 sm:w-11 lg:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Ouvrir le menu"
             >

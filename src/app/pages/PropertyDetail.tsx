@@ -2,7 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
-import { Bed, Bath, Maximize, MapPin, Check, Heart, CalendarDays, ChevronLeft, ChevronRight, Expand, Share2, Flag, MessageCircle, PhoneCall, PlayCircle, X } from "lucide-react";
+import { ArrowLeft, Bed, Bath, Maximize, MapPin, Check, Heart, CalendarDays, ChevronLeft, ChevronRight, Expand, Share2, Flag, MessageCircle, PhoneCall, PlayCircle, X } from "lucide-react";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { formatPrice } from "../utils/format";
 import { getFavoriteIds, isUserLoggedIn, toggleFavoriteId } from "../utils/storage";
@@ -15,6 +15,7 @@ import tiktokLogo from "../../assets/tiktok-.webp";
 import { createReport, createVisit, getProperty, subscribeToPropertiesRealtime, toggleFavorite } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
 import { getCachedPublicProperties, getPublicPropertiesAsync } from "../utils/publicListings";
+import { companyName, companyPhoneDisplay, companyPrimaryPhoneRaw, companyWhatsAppPhoneRaw } from "../utils/company";
 
 type MediaItem =
   | { kind: "image"; src: string }
@@ -62,28 +63,13 @@ export function PropertyDetail() {
     [property]
   );
   const mediaItems: MediaItem[] = useMemo(
-    () => {
-      if (!property) {
-        return [];
-      }
-
-      if (propertyVideoSrc) {
-        return [{ kind: "video" as const, src: propertyVideoSrc }];
-      }
-
-      return (galleryImages.length ? galleryImages : coverImage ? [coverImage] : []).map((image) => ({
-        kind: "image" as const,
-        src: image,
-      }));
-    },
-    [property, propertyVideoSrc, galleryImages, coverImage]
+    () => (propertyVideoSrc ? [{ kind: "video" as const, src: propertyVideoSrc }] : []),
+    [propertyVideoSrc]
   );
   const [activeMedia, setActiveMedia] = useState<MediaItem>(
     propertyVideoSrc
       ? { kind: "video", src: propertyVideoSrc }
-      : galleryImages[0]
-        ? { kind: "image", src: galleryImages[0] }
-        : { kind: "image", src: coverImage }
+      : { kind: "video", src: "" }
   );
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
@@ -134,9 +120,9 @@ export function PropertyDetail() {
       return;
     }
     if (isMobile) {
-      const phone = "+21695123456";
+      const phone = companyPrimaryPhoneRaw;
       if (type === "whatsapp") {
-        window.open(`https://wa.me/${phone.replace(/\D/g, "")}`, "_blank");
+        window.open(`https://wa.me/${companyWhatsAppPhoneRaw.replace(/\D/g, "")}`, "_blank");
       } else if (type === "call") {
         window.location.href = `tel:${phone}`;
       }
@@ -279,7 +265,7 @@ export function PropertyDetail() {
     if (mediaItems.length) {
       setActiveMedia(mediaItems[0]);
     } else {
-      setActiveMedia({ kind: "image", src: coverImage });
+      setActiveMedia({ kind: "video", src: "" });
     }
     setIsActiveVideoBroken(false);
     setIsFavorite(getFavoriteIds().includes(property.id));
@@ -447,6 +433,14 @@ export function PropertyDetail() {
       
       <section className="bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_62%,#f3f6fb_100%)] pt-6 pb-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Link
+            to="/listings"
+            className="mb-4 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Retour aux annonces
+          </Link>
+
           <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-500">
             <span>Accueil</span>
             <span>›</span>
@@ -455,10 +449,10 @@ export function PropertyDetail() {
             <span className="max-w-[280px] truncate">{property.title}</span>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[1.65fr_0.95fr]">
-            <div className="rounded-[28px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
-              <div className="relative h-[380px] overflow-hidden rounded-[20px] bg-white border border-slate-200/40 md:h-[480px]">
-                {activeMedia.kind === "video" && !isActiveVideoBroken ? (
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.65fr_0.95fr]">
+            <div className="rounded-[24px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] p-3 sm:rounded-[28px] sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+              <div className="relative h-[240px] overflow-hidden rounded-[18px] bg-white border border-slate-200/40 sm:h-[380px] md:h-[480px]">
+                {activeMedia.kind === "video" && activeMedia.src && !isActiveVideoBroken ? (
                   <video
                     key={activeMedia.src}
                     src={activeMedia.src}
@@ -468,17 +462,19 @@ export function PropertyDetail() {
                     muted
                     playsInline
                     controls
-                    preload="auto"
+                    preload="metadata"
                     onError={() => setIsActiveVideoBroken(true)}
                   >
                     Votre navigateur ne peut pas lire cette vidéo.
                   </video>
                 ) : (
-                  <ImageWithFallback
-                    src={activeMedia.kind === "image" ? activeMedia.src : coverImage || galleryImages[0] || property.image}
-                    alt={property.title}
-                    className="h-full w-full object-contain"
-                  />
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-slate-950 px-6 text-center text-white">
+                    <PlayCircle className="h-12 w-12 text-sky-300" />
+                    <div>
+                      <p className="text-base font-semibold">Vidéo indisponible</p>
+                      <p className="mt-1 text-sm text-slate-300">Cette annonce s'affiche uniquement avec sa vidéo.</p>
+                    </div>
+                  </div>
                 )}
 
                 {mediaItems.length > 1 && (
@@ -518,9 +514,11 @@ export function PropertyDetail() {
                   </div>
                 )}
 
-                <div className="absolute bottom-4 right-4 rounded-[10px] bg-black/40 backdrop-blur-sm px-4 py-2 text-sm font-semibold text-white border border-white/20">
-                  {Math.max(1, activeMediaIndex + 1)} / {mediaItems.length}
-                </div>
+                {mediaItems.length > 0 && (
+                  <div className="absolute bottom-4 right-4 rounded-[10px] bg-black/40 backdrop-blur-sm px-4 py-2 text-sm font-semibold text-white border border-white/20">
+                    {Math.max(1, activeMediaIndex + 1)} / {mediaItems.length}
+                  </div>
+                )}
               </div>
 
               {mediaItems.length > 1 && (
@@ -598,11 +596,11 @@ export function PropertyDetail() {
                 </button>
               </div>
 
-              <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_18px_42px_rgba(15,23,42,0.08)]">
-                <p className="text-4xl font-bold text-slate-950">{formatPrice(property.price, property.transactionType)}</p>
+              <div className="rounded-[24px] border border-slate-200 bg-white p-5 sm:p-6 shadow-[0_18px_42px_rgba(15,23,42,0.08)]">
+                <p className="text-3xl font-bold text-slate-950 sm:text-4xl">{formatPrice(property.price, property.transactionType)}</p>
                 <p className="mt-1 text-sm text-slate-500">{property.type} • {displayLocation}</p>
 
-                <div className="mt-5 flex items-center gap-4 border-y border-slate-200 py-4 text-slate-700">
+                <div className="mt-5 flex flex-wrap items-center gap-3 border-y border-slate-200 py-4 text-slate-700 sm:gap-4">
                   <span className="inline-flex items-center gap-1.5 text-sm"><Bed className="h-4 w-4" /> {property.bedrooms} Ch.</span>
                   <span className="inline-flex items-center gap-1.5 text-sm"><Bath className="h-4 w-4" /> {property.bathrooms} SdB</span>
                   <span className="inline-flex items-center gap-1.5 text-sm"><Maximize className="h-4 w-4" /> {property.area} m²</span>
@@ -652,8 +650,8 @@ export function PropertyDetail() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white rounded-[32px] p-8 shadow-lg">
-                <div className="flex items-start justify-between mb-4">
+              <div className="bg-white rounded-[24px] p-5 shadow-lg sm:rounded-[32px] sm:p-8">
+                <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="mb-3 flex flex-wrap gap-2">
                       {property.tags.map((tag) => (
@@ -662,7 +660,7 @@ export function PropertyDetail() {
                         </span>
                       ))}
                     </div>
-                    <h1 className="font-serif text-4xl font-semibold text-black mb-2">{property.title}</h1>
+                    <h1 className="mb-2 font-serif text-3xl font-semibold text-black sm:text-4xl">{property.title}</h1>
                     <div className="flex items-center gap-2 text-gray-600">
                       <MapPin className="h-5 w-5" />
                       <span className="text-lg">{displayLocation}</span>
@@ -676,7 +674,7 @@ export function PropertyDetail() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-8 py-6 border-t border-gray-200">
+                <div className="flex flex-wrap items-center gap-5 py-6 border-t border-gray-200 sm:gap-8">
                   <div className="flex items-center gap-2">
                     <Bed className="h-6 w-6 text-gray-600" />
                     <div>
@@ -771,7 +769,7 @@ export function PropertyDetail() {
             </div>
 
             <div className="lg:col-span-1">
-              <div className="sticky top-28 rounded-[32px] border border-sky-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-8 shadow-[0_18px_38px_rgba(15,23,42,0.12)]">
+              <div className="sticky top-24 rounded-[24px] border border-sky-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 shadow-[0_18px_38px_rgba(15,23,42,0.12)] sm:top-28 sm:rounded-[32px] sm:p-8">
                 <div className="mb-6 flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-100">
                     <CalendarDays className="h-6 w-6 text-sky-700" />
@@ -828,7 +826,7 @@ export function PropertyDetail() {
                       value={formState.phone}
                       onChange={(event) => setFormState((current) => ({ ...current, phone: event.target.value }))}
                       className="w-full rounded-xl border border-slate-300 px-4 py-2.5 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                      placeholder="+216 20 123 456"
+                      placeholder="Ex : +216 97 222 822"
                     />
                   </div>
                   <div>
@@ -950,18 +948,18 @@ export function PropertyDetail() {
             <div className="px-6 py-6 space-y-4">
               <div className="rounded-[16px] border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-2">Nom</p>
-                <p className="text-lg font-bold text-slate-950">Ahmed Ben Salah</p>
+                <p className="text-lg font-bold text-slate-950">{companyName}</p>
               </div>
 
               <div className="rounded-[16px] border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-2">Téléphone</p>
-                <p className="text-lg font-bold text-slate-950 font-mono">+216 95 123 456</p>
+                <p className="text-lg font-bold text-slate-950 font-mono">{companyPhoneDisplay}</p>
                 <p className="mt-1 text-xs text-slate-500">Réponse rapide garantie</p>
               </div>
 
               <div className="flex gap-2 pt-2">
                 <a
-                  href="https://wa.me/21695123456"
+                  href={`https://wa.me/${companyWhatsAppPhoneRaw.replace(/\D/g, "")}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 rounded-[12px] bg-emerald-50 px-4 py-2 text-center font-semibold text-emerald-700 transition hover:bg-emerald-100"
@@ -969,7 +967,7 @@ export function PropertyDetail() {
                   WhatsApp
                 </a>
                 <a
-                  href="tel:+21695123456"
+                  href={`tel:${companyPrimaryPhoneRaw}`}
                   className="flex-1 rounded-[12px] bg-sky-50 px-4 py-2 text-center font-semibold text-sky-700 transition hover:bg-sky-100"
                 >
                   Appeler

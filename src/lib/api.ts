@@ -187,13 +187,19 @@ export interface ApprovalSubmissionPayload {
 }
 
 export async function approveListingWithBackend(submission: ApprovalSubmissionPayload): Promise<number> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/submissions/approve`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ submission }),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${BACKEND_BASE_URL}/api/admin/submissions/approve`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ submission }),
+    });
+  } catch (error) {
+    throw new Error(`Backend indisponible sur ${BACKEND_BASE_URL}. Vérifiez que le serveur backend (port 3001) est démarré.`);
+  }
 
   let payload: any = null;
   try {

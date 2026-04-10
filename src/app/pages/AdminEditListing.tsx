@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, ImagePlus, LocateFixed, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, LocateFixed, Save } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import { approveListingWithBackend, clearListingsCache, getProperties } from "../../lib/api";
 import {
@@ -210,7 +210,7 @@ export function AdminEditListing() {
     if (!listing) return;
 
     const gallery = splitList(formState.gallery);
-    const coverImage = formState.coverImage.trim() || gallery[0] || "";
+    const coverImage = gallery[0] || listing.coverImage || "";
     const features = splitList(formState.features);
     const tags = splitList(formState.tags);
     const nearbyCommodities = splitList(formState.nearbyCommodities);
@@ -389,9 +389,8 @@ export function AdminEditListing() {
               <div className="rounded-[22px] border border-sky-200/80 bg-white/80 p-5 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md">
                 <p className="text-xs font-bold uppercase tracking-widest text-sky-700">Media & taxonomie</p>
                 <div className="mt-4 grid gap-3">
-                  <div>
-                    <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-slate-600"><ImagePlus className="h-3 w-3" /> Image de couverture</label>
-                    <input value={formState.coverImage} onChange={(e) => updateField("coverImage", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-sky-400 focus:bg-white focus:outline-none" />
+                  <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-xs text-slate-600">
+                    La vidéo publiée s'affiche directement sur le site. Utilisez seulement la galerie comme secours si besoin.
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold text-slate-600">Galerie URLs (une par ligne)</label>
