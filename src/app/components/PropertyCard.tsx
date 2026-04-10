@@ -36,8 +36,8 @@ export function PropertyCard({ property }: PropertyCardProps) {
   };
 
   return (
-    <article className="group overflow-hidden rounded-[28px] border border-white/60 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(15,23,42,0.12)]">
-      <div className="relative h-64 overflow-hidden sm:h-80">
+    <article className="group overflow-hidden rounded-[20px] border border-white/60 bg-white shadow-[0_18px_34px_rgba(15,23,42,0.08)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(15,23,42,0.12)] sm:rounded-[28px]">
+      <div className="relative h-40 overflow-hidden sm:h-64 lg:h-80">
         <Link to={`/property/${property.id}`} target="_blank" rel="noopener noreferrer">
           {showcaseVideoSrc && !isVideoBroken ? (
             <video
@@ -60,9 +60,9 @@ export function PropertyCard({ property }: PropertyCardProps) {
             </div>
           )}
         </Link>
-        <div className="absolute inset-x-0 top-0 flex items-start justify-between p-4">
-          <div className="flex flex-wrap gap-2">
-            <div className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${property.transactionType === "Location" ? "bg-amber-300 text-slate-950" : "bg-emerald-300 text-slate-950"}`}>
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2.5 sm:p-4">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+            <div className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] sm:px-3 sm:text-xs sm:tracking-[0.18em] ${property.transactionType === "Location" ? "bg-amber-300 text-slate-950" : "bg-emerald-300 text-slate-950"}`}>
               {property.transactionType}
             </div>
           </div>
@@ -70,7 +70,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
             type="button"
             aria-label={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
             onClick={handleFavoriteClick}
-            className={`rounded-full p-3 backdrop-blur transition ${
+            className={`rounded-full p-2.5 backdrop-blur transition sm:p-3 ${
               isFavorite
                 ? "bg-rose-500 text-white shadow-lg shadow-rose-500/30"
                 : "bg-white/90 text-slate-700 hover:bg-white"
@@ -80,50 +80,50 @@ export function PropertyCard({ property }: PropertyCardProps) {
           </button>
         </div>
       </div>
-      <div className="p-4 sm:p-5">
-        <div className="mb-1.5 flex items-start justify-between">
-          <Link to={`/property/${property.id}`} className="pr-4" target="_blank" rel="noopener noreferrer">
-            <h3 className="line-clamp-2 min-h-[3.5rem] text-xl font-semibold leading-tight text-slate-950">{property.title}</h3>
+      <div className="p-3 sm:p-5">
+        <div className="mb-1.5 flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between">
+          <Link to={`/property/${property.id}`} className="min-w-0 pr-0 sm:pr-4" target="_blank" rel="noopener noreferrer">
+            <h3 className="line-clamp-2 min-h-[2.4rem] text-sm font-semibold leading-tight text-slate-950 sm:min-h-[3.5rem] sm:text-xl">{property.title}</h3>
           </Link>
-          <p className="shrink-0 whitespace-nowrap text-right text-lg font-bold text-sky-700">
+          <p className="shrink-0 whitespace-nowrap text-left text-sm font-bold text-sky-700 sm:text-right sm:text-lg">
             {formatPrice(property.price, property.transactionType)}
           </p>
         </div>
-        <div className="mb-3 flex items-center gap-1 text-slate-500">
-          <MapPin className="h-4 w-4" />
-          <span className="text-sm">{property.location}</span>
+        <div className="mb-2 flex items-center gap-1 text-slate-500 sm:mb-3">
+          <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+          <span className="line-clamp-1 text-[11px] sm:text-sm">{property.location}</span>
         </div>
-        <p className="mb-3 line-clamp-1 text-sm leading-6 text-slate-600">{property.description}</p>
+        <p className="mb-2 line-clamp-2 text-[11px] leading-4 text-slate-600 sm:mb-3 sm:text-sm sm:leading-6">{property.description}</p>
         {highlightBadges.length > 0 && (
-          <div className="mb-4 flex flex-wrap gap-2">
+          <div className="mb-3 flex flex-wrap gap-1.5 sm:mb-4 sm:gap-2">
             {highlightBadges.map((badge) => (
-              <span key={badge} className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800">
+              <span key={badge} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-semibold text-sky-800 sm:px-2.5 sm:text-[11px]">
                 {badge}
               </span>
             ))}
           </div>
         )}
         <div className="flex w-full items-center justify-center text-slate-700">
-          <div className="flex flex-1 items-center justify-center gap-1.5">
-            <Bed className="h-4 w-4" />
-            <span className="text-sm">{property.bedrooms} Ch.</span>
+          <div className="flex flex-1 items-center justify-center gap-1">
+            <Bed className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span className="text-[11px] sm:text-sm">{property.bedrooms} Ch.</span>
           </div>
-          <span className="px-2 text-slate-300">|</span>
-          <div className="flex flex-1 items-center justify-center gap-1.5">
-            <Bath className="h-4 w-4" />
-            <span className="text-sm">{property.bathrooms} SdB</span>
+          <span className="px-1 text-slate-300 sm:px-2">|</span>
+          <div className="flex flex-1 items-center justify-center gap-1">
+            <Bath className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span className="text-[11px] sm:text-sm">{property.bathrooms} SdB</span>
           </div>
-          <span className="px-2 text-slate-300">|</span>
-          <div className="flex flex-1 items-center justify-center gap-1.5">
-            <Maximize className="h-4 w-4" />
-            <span className="text-sm">{property.area} m²</span>
+          <span className="px-1 text-slate-300 sm:px-2">|</span>
+          <div className="flex flex-1 items-center justify-center gap-1">
+            <Maximize className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span className="text-[11px] sm:text-sm">{property.area} m²</span>
           </div>
         </div>
         <Link
           to={`/property/${property.id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-4 inline-flex items-center rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-sky-200 hover:text-sky-700"
+          className="mt-3 inline-flex w-full items-center justify-center rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-900 transition hover:border-sky-200 hover:text-sky-700 sm:mt-4 sm:w-auto sm:px-4 sm:text-sm"
         >
           Voir le détail
         </Link>

@@ -574,11 +574,11 @@ export function Listings() {
               <div className="mb-6">
                 <p className="text-slate-500">Chargement des annonces...</p>
               </div>
-              <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, index) => (
                   <div
                     key={`listing-skeleton-${index}`}
-                    className="overflow-hidden rounded-[24px] border border-slate-200/80 bg-white p-4 shadow-sm"
+                    className="overflow-hidden rounded-[20px] border border-slate-200/80 bg-white p-3 shadow-sm sm:rounded-[24px] sm:p-4"
                   >
                     <div className="h-48 w-full animate-pulse rounded-2xl bg-slate-200/70" />
                     <div className="mt-4 h-5 w-2/3 animate-pulse rounded bg-slate-200/70" />
@@ -636,7 +636,7 @@ export function Listings() {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
                 {filteredProperties.map((property) => (
                   <PropertyCard key={property.id} property={property} />
                 ))}
