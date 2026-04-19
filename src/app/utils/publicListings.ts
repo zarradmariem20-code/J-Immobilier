@@ -13,7 +13,7 @@ export function getCachedPublicProperties(): Property[] {
   try {
     for (let index = 0; index < window.localStorage.length; index += 1) {
       const key = window.localStorage.key(index);
-      if (!key?.startsWith("ji:listings:")) {
+      if (!key?.startsWith("ji:listings:") || key.includes("includeArchived:yes")) {
         continue;
       }
 
@@ -24,7 +24,9 @@ export function getCachedPublicProperties(): Property[] {
 
       const parsed = JSON.parse(raw) as { data?: any[] };
       if (Array.isArray(parsed?.data) && parsed.data.length > 0) {
-        return parsed.data.map(mapSupabaseProperty);
+        return parsed.data
+          .filter((row) => !row?.status || row.status === "active")
+          .map(mapSupabaseProperty);
       }
     }
   } catch {

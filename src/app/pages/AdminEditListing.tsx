@@ -153,6 +153,16 @@ export function AdminEditListing() {
   const [success, setSuccess] = useState("");
   const [isLocating, setIsLocating] = useState(false);
   const cityOptions = getCitiesForRegion(formState.region);
+  const galleryPreviewUrls = useMemo(() => {
+    const previewUrls = splitList(formState.gallery);
+
+    if (formState.coverImage.trim().length > 0 && !previewUrls.includes(formState.coverImage.trim())) {
+      previewUrls.unshift(formState.coverImage.trim());
+    }
+
+    return previewUrls;
+  }, [formState.coverImage, formState.gallery]);
+  const videoPreviewUrl = listing?.videoUrl?.trim() || "";
 
   useEffect(() => {
     if (!adminSession) {
@@ -442,6 +452,41 @@ export function AdminEditListing() {
                   <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-xs text-slate-600">
                     La vidéo publiée s'affiche directement sur le site. Utilisez seulement la galerie comme secours si besoin.
                   </div>
+                  {(galleryPreviewUrls.length > 0 || videoPreviewUrl) && (
+                    <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Aperçu des médias</p>
+
+                      {videoPreviewUrl && (
+                        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
+                          <video
+                            key={videoPreviewUrl}
+                            src={videoPreviewUrl}
+                            controls
+                            preload="metadata"
+                            className="h-auto max-h-[320px] w-full bg-slate-950 object-contain"
+                          />
+                        </div>
+                      )}
+
+                      {galleryPreviewUrls.length > 0 && (
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                          {galleryPreviewUrls.map((url, index) => (
+                            <div key={`${url}-${index}`} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                              <img
+                                src={url}
+                                alt={`Media ${index + 1}`}
+                                className="h-32 w-full object-cover"
+                                loading="lazy"
+                              />
+                              <div className="border-t border-slate-100 px-2 py-1.5 text-[11px] font-medium text-slate-500">
+                                {index === 0 ? "Image principale" : `Galerie ${index + 1}`}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold text-slate-600">Galerie URLs (une par ligne)</label>
                     <textarea value={formState.gallery} onChange={(e) => updateField("gallery", e.target.value)} rows={6} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-sky-400 focus:bg-white focus:outline-none" />

@@ -66,6 +66,17 @@ function toSafeNumber(value: unknown, fallback = 0) {
   return Number.isFinite(numericValue) ? numericValue : fallback;
 }
 
+function mergeListingEntries(primary: ListingSubmission, secondary: ListingSubmission): ListingSubmission {
+  return {
+    ...secondary,
+    ...primary,
+    supabaseId: primary.supabaseId ?? secondary.supabaseId,
+    coverImage: primary.coverImage || secondary.coverImage,
+    gallery: (primary.gallery && primary.gallery.length > 0) ? primary.gallery : secondary.gallery,
+    videoUrl: primary.videoUrl || secondary.videoUrl,
+  };
+}
+
 const PAGE_SIZE = 10;
 
 async function withTimeout<T>(promiseLike: PromiseLike<T>, timeoutMs = 12000): Promise<T> {
@@ -452,10 +463,25 @@ export function Admin() {
     };
   }, [adminSession, activeView, loadVisitsData]);
 
-  const allItems = useMemo(
-    () => [...items, ...publishedItems].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [items, publishedItems],
-  );
+  const allItems = useMemo(() => {
+    const mergedByKey = new Map<string, ListingSubmission>();
+
+    for (const item of [...publishedItems, ...items]) {
+      const key = typeof item.supabaseId === "number" ? `supabase:${item.supabaseId}` : `local:${item.id}`;
+      const existing = mergedByKey.get(key);
+
+      if (!existing) {
+        mergedByKey.set(key, item);
+        continue;
+      }
+
+      const preferred = item.id.startsWith("db-") ? existing : item;
+      const fallback = preferred === item ? existing : item;
+      mergedByKey.set(key, mergeListingEntries(preferred, fallback));
+    }
+
+    return [...mergedByKey.values()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [items, publishedItems]);
 
   const handleAdminLogin = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1259,7 +1285,7 @@ export function Admin() {
             return;
           }
 
-          await withTimeout(inactivateListingWithBackend(submission.supabaseId));
+          await inactivateListingWithBackend(submission.supabaseId);
           clearListingsCache();
           setPublishedItems((prev) =>
             prev.map((item) =>
@@ -1279,30 +1305,29 @@ export function Admin() {
             return;
           }
 
-          const publishedId = await withTimeout(
-            approveListingWithBackend({
-              id: submission.id,
-              title: submission.title,
-              price: submission.price,
-              transactionType: submission.transactionType,
-              region: submission.region,
-              city: submission.city,
-              location: submission.location,
-              mapLocationQuery: submission.mapLocationQuery || undefined,
-              nearbyCommodities: submission.nearbyCommodities ?? [],
-              propertyType: submission.propertyType,
-              bedrooms: submission.bedrooms ?? 0,
-              bathrooms: submission.bathrooms ?? 0,
-              area: submission.area ?? 0,
-              description: submission.description || undefined,
-              coverImage: submission.coverImage || undefined,
-              gallery: submission.gallery ?? [],
-              videoUrl: submission.videoUrl || undefined,
-              features: submission.features ?? [],
-              tags: submission.tags ?? [],
-              featured: submission.featured,
-            }),
-          );
+          const publishedId = await approveListingWithBackend({
+            id: submission.id,
+            title: submission.title,
+            price: submission.price,
+            transactionType: submission.transactionType,
+            region: submission.region,
+            city: submission.city,
+            location: submission.location,
+            mapLocationQuery: submission.mapLocationQuery || undefined,
+            nearbyCommodities: submission.nearbyCommodities ?? [],
+            propertyType: submission.propertyType,
+            bedrooms: submission.bedrooms ?? 0,
+            bathrooms: submission.bathrooms ?? 0,
+            area: submission.area ?? 0,
+            description: submission.description || undefined,
+            coverImage: submission.coverImage || undefined,
+            gallery: submission.gallery ?? [],
+            videoUrl: submission.videoUrl || undefined,
+            features: submission.features ?? [],
+            tags: submission.tags ?? [],
+            featured: submission.featured,
+            supabaseId: submission.supabaseId,
+          });
 
           clearListingsCache();
           setPublishedItems((prev) =>
@@ -1325,33 +1350,28 @@ export function Admin() {
       }
 
       if (status === "approved") {
-        // Approve locally first so UI never stays blocked waiting on network.
-        updateListingSubmissionStatus(id, status, submission.supabaseId);
-        setItems(getListingSubmissions());
-
-        const freshSubmission = getListingSubmissions().find((item) => item.id === id) ?? submission;
         const publishedId = await approveListingWithBackend({
-          id: freshSubmission.id,
-          title: freshSubmission.title,
-          price: freshSubmission.price,
-          transactionType: freshSubmission.transactionType,
-          region: freshSubmission.region,
-          city: freshSubmission.city,
-          location: freshSubmission.location,
-          mapLocationQuery: freshSubmission.mapLocationQuery || undefined,
-          nearbyCommodities: freshSubmission.nearbyCommodities ?? [],
-          propertyType: freshSubmission.propertyType,
-          bedrooms: freshSubmission.bedrooms ?? 0,
-          bathrooms: freshSubmission.bathrooms ?? 0,
-          area: freshSubmission.area ?? 0,
-          description: freshSubmission.description || undefined,
-          coverImage: freshSubmission.coverImage || undefined,
-          gallery: freshSubmission.gallery ?? [],
-          videoUrl: freshSubmission.videoUrl || undefined,
-          features: freshSubmission.features ?? [],
-          tags: freshSubmission.tags ?? [],
-          featured: freshSubmission.featured,
-          supabaseId: freshSubmission.supabaseId,
+          id: submission.id,
+          title: submission.title,
+          price: submission.price,
+          transactionType: submission.transactionType,
+          region: submission.region,
+          city: submission.city,
+          location: submission.location,
+          mapLocationQuery: submission.mapLocationQuery || undefined,
+          nearbyCommodities: submission.nearbyCommodities ?? [],
+          propertyType: submission.propertyType,
+          bedrooms: submission.bedrooms ?? 0,
+          bathrooms: submission.bathrooms ?? 0,
+          area: submission.area ?? 0,
+          description: submission.description || undefined,
+          coverImage: submission.coverImage || undefined,
+          gallery: submission.gallery ?? [],
+          videoUrl: submission.videoUrl || undefined,
+          features: submission.features ?? [],
+          tags: submission.tags ?? [],
+          featured: submission.featured,
+          supabaseId: submission.supabaseId,
         });
 
         updateListingSubmissionStatus(id, status, publishedId);
@@ -1359,11 +1379,9 @@ export function Admin() {
         clearListingsCache();
         setItems(getListingSubmissions());
       } else if (status === "rejected" && submission.status === "approved" && submission.supabaseId) {
-        // Inactivate locally first so listing disappears immediately from public merged sources.
+        await inactivateListingWithBackend(submission.supabaseId);
         updateListingSubmissionStatus(id, status, submission.supabaseId);
         setItems(getListingSubmissions());
-
-        await withTimeout(inactivateListingWithBackend(submission.supabaseId));
         clearListingsCache();
       } else {
         updateListingSubmissionStatus(id, status);
@@ -1372,7 +1390,7 @@ export function Admin() {
       const reason = err?.message ?? "Erreur inconnue";
       console.error("Erreur action admin:", err);
       if (status === "approved") {
-        setActionError(`Annonce approuvée localement, mais non synchronisée sur Supabase: ${reason}`);
+        setActionError(`Impossible d'approuver cette annonce sur Supabase: ${reason}`);
       } else {
         setActionError(`Impossible de traiter cette action: ${reason}`);
       }

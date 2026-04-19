@@ -51,6 +51,10 @@ const propertyInFlight = new Map<number, Promise<any>>();
 
 const isFresh = (at: number, ttlMs: number) => Date.now() - at < ttlMs;
 
+function filterActiveRows<T extends { status?: string | null }>(rows: T[]): T[] {
+  return rows.filter((row) => !row?.status || row.status === "active");
+}
+
 function withTimeout<T>(promiseLike: PromiseLike<T>, timeoutMs: number, errorMessage: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timeoutId = setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
@@ -217,14 +221,22 @@ export async function approveListingWithBackend(submission: ApprovalSubmissionPa
   let response: Response;
 
   try {
-    response = await fetch(`${BACKEND_BASE_URL}/api/admin/submissions/approve`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ submission }),
-    });
+    response = await withTimeout(
+      fetch(`${BACKEND_BASE_URL}/api/admin/submissions/approve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ submission }),
+      }),
+      20_000,
+      "La synchronisation Supabase de l'annonce a expiré."
+    );
   } catch (error) {
+    if (error instanceof Error && error.message) {
+      throw error;
+    }
+
     throw new Error(`Backend indisponible sur ${BACKEND_BASE_URL}. Vérifiez que le serveur backend (port 3001) est démarré.`);
   }
 
@@ -250,13 +262,17 @@ export async function approveListingWithBackend(submission: ApprovalSubmissionPa
 }
 
 export async function inactivateListingWithBackend(supabaseId: number): Promise<number> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/submissions/inactivate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ supabaseId }),
-  });
+  const response = await withTimeout(
+    fetch(`${BACKEND_BASE_URL}/api/admin/submissions/inactivate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ supabaseId }),
+    }),
+    20_000,
+    "La mise à jour Supabase de l'annonce a expiré."
+  );
 
   let payload: any = null;
   try {
@@ -278,9 +294,13 @@ export async function inactivateListingWithBackend(supabaseId: number): Promise<
 }
 
 export async function deleteListingWithBackend(supabaseId: number): Promise<number> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/submissions/${supabaseId}`, {
-    method: "DELETE",
-  });
+  const response = await withTimeout(
+    fetch(`${BACKEND_BASE_URL}/api/admin/submissions/${supabaseId}`, {
+      method: "DELETE",
+    }),
+    20_000,
+    "La suppression Supabase de l'annonce a expiré."
+  );
 
   let payload: any = null;
   try {
@@ -580,7 +600,7 @@ export async function getProperties(options?: {
   const storageKey = `${LIST_STORAGE_PREFIX}${key}`;
   const cached = listCache.get(key);
   if (!options?.forceRefresh && cached && isFresh(cached.at, LIST_CACHE_TTL_MS) && cached.data.length > 0) {
-    return cached.data;
+    return options?.includeArchived ? cached.data : filterActiveRows(cached.data);
   }
 
   const storageCached = readStorageCache<any[]>(storageKey);
@@ -594,7 +614,7 @@ export async function getProperties(options?: {
       }
     }
 
-    return storageCached.data;
+    return options?.includeArchived ? storageCached.data : filterActiveRows(storageCached.data);
   }
 
   const activeRequest = listInFlight.get(key);
@@ -670,6 +690,8 @@ export async function getProperties(options?: {
       } catch (backendError) {
         let query = supabase.from("properties").select(PROPERTY_COLUMNS).order("created_at", { ascending: false });
 
+        query = query.eq("status", "active");
+
         if (options?.region) {
           query = query.eq("region", options.region);
         }
@@ -701,6 +723,8 @@ export async function getProperties(options?: {
       if (rows.length === 0 && Array.isArray(staleStorageRows) && staleStorageRows.length > 0) {
         rows = staleStorageRows;
       }
+
+      rows = filterActiveRows(rows);
 
       const now = Date.now();
       listCache.set(key, { at: now, data: rows });
