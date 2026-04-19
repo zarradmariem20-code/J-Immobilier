@@ -64,14 +64,37 @@ export function PropertyDetail() {
     [property]
   );
   const mediaItems: MediaItem[] = useMemo(
-    () => (propertyVideoSrc ? [{ kind: "video" as const, src: propertyVideoSrc }] : []),
-    [propertyVideoSrc]
+    () => {
+      const seenSources = new Set<string>();
+      const items: MediaItem[] = [];
+
+      for (const imageSource of [coverImage, ...galleryImages]) {
+        const normalizedSource = imageSource.trim();
+        if (!normalizedSource || seenSources.has(normalizedSource)) {
+          continue;
+        }
+
+        seenSources.add(normalizedSource);
+        items.push({ kind: "image", src: normalizedSource });
+      }
+
+      if (propertyVideoSrc && !seenSources.has(propertyVideoSrc)) {
+        items.push({ kind: "video", src: propertyVideoSrc });
+      }
+
+      return items;
+    },
+    [coverImage, galleryImages, propertyVideoSrc]
   );
-  const [activeMedia, setActiveMedia] = useState<MediaItem>(
-    propertyVideoSrc
-      ? { kind: "video", src: propertyVideoSrc }
-      : { kind: "video", src: "" }
+  const mediaItemsSignature = useMemo(
+    () => mediaItems.map((item) => `${item.kind}:${item.src}`).join("|"),
+    [mediaItems]
   );
+  const preferredInitialMediaIndex = useMemo(() => {
+    const firstImageIndex = mediaItems.findIndex((item) => item.kind === "image");
+    return firstImageIndex >= 0 ? firstImageIndex : 0;
+  }, [mediaItems]);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
@@ -92,7 +115,7 @@ export function PropertyDetail() {
   const [successPulse, setSuccessPulse] = useState(false);
   const [isActiveVideoBroken, setIsActiveVideoBroken] = useState(false);
   const [activeVideoAspectRatio, setActiveVideoAspectRatio] = useState<number | null>(null);
-  const activeMediaIndex = mediaItems.findIndex((item) => item.kind === activeMedia.kind && item.src === activeMedia.src);
+  const activeMedia = mediaItems[activeMediaIndex] ?? { kind: "image", src: "" };
   const isPlayableActiveVideo = activeMedia.kind === "video" && Boolean(activeMedia.src) && !isActiveVideoBroken;
 
   const applyAuthUser = (user: any | null) => {
@@ -267,15 +290,21 @@ export function PropertyDetail() {
   }, [loginModalOpen]);
 
   useEffect(() => {
+    setActiveMediaIndex((currentIndex) => {
+      if (!mediaItems.length) {
+        return 0;
+      }
+
+      return currentIndex >= mediaItems.length ? 0 : currentIndex;
+    });
+  }, [mediaItems.length, mediaItemsSignature]);
+
+  useEffect(() => {
     if (!property) {
       return;
     }
 
-    if (mediaItems.length) {
-      setActiveMedia(mediaItems[0]);
-    } else {
-      setActiveMedia({ kind: "video", src: "" });
-    }
+    setActiveMediaIndex(preferredInitialMediaIndex);
     setIsActiveVideoBroken(false);
     setActiveVideoAspectRatio(null);
     setIsFavorite(getFavoriteIds().includes(property.id));
@@ -288,7 +317,7 @@ export function PropertyDetail() {
     setSubmitMessage("");
     setSubmitMessageKind("info");
     setSuccessPulse(false);
-  }, [property, mediaItems, coverImage, isLoggedIn, userProfile.email, userProfile.fullName, userProfile.phone]);
+  }, [property?.id, preferredInitialMediaIndex, mediaItemsSignature, isLoggedIn, userProfile.email, userProfile.fullName, userProfile.phone]);
 
   if (isPropertyLoading) {
     return (
@@ -335,7 +364,7 @@ export function PropertyDetail() {
 
     const currentIndex = activeMediaIndex >= 0 ? activeMediaIndex : 0;
     const nextIndex = (currentIndex - 1 + mediaItems.length) % mediaItems.length;
-    setActiveMedia(mediaItems[nextIndex]);
+    setActiveMediaIndex(nextIndex);
   };
 
   const handleNextImage = () => {
@@ -349,7 +378,7 @@ export function PropertyDetail() {
 
     const currentIndex = activeMediaIndex >= 0 ? activeMediaIndex : 0;
     const nextIndex = (currentIndex + 1) % mediaItems.length;
-    setActiveMedia(mediaItems[nextIndex]);
+    setActiveMediaIndex(nextIndex);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -466,9 +495,16 @@ export function PropertyDetail() {
                 className={`relative overflow-hidden rounded-[18px] border border-slate-200/40 ${isPlayableActiveVideo ? "mx-auto w-full max-w-[360px] bg-slate-950 sm:max-w-[420px] md:max-w-[520px]" : "h-[240px] bg-white sm:h-[380px] md:h-[480px]"}`}
                 style={isPlayableActiveVideo ? { aspectRatio: activeVideoAspectRatio ?? "9 / 16" } : undefined}
               >
-                {isPlayableActiveVideo ? (
+                {activeMedia.kind === "image" && activeMedia.src ? (
+                  <ImageWithFallback
+                    src={activeMedia.src}
+                    alt={property.title}
+                    className="h-full w-full object-cover"
+                  />
+                ) : isPlayableActiveVideo ? (
                   <VideoPlayer
                     src={activeMedia.src}
+                    poster={coverImage || galleryImages[0] || undefined}
                     label={property.title}
                     preload="auto"
                     fit="contain"
@@ -480,7 +516,7 @@ export function PropertyDetail() {
                     <PlayCircle className="h-12 w-12 text-sky-300" />
                     <div>
                       <p className="text-base font-semibold">Vidéo indisponible</p>
-                      <p className="mt-1 text-sm text-slate-300">Cette annonce s'affiche uniquement avec sa vidéo.</p>
+                      <p className="mt-1 text-sm text-slate-300">Passez aux photos dans le carrousel pour voir les autres médias du bien.</p>
                     </div>
                   </div>
                 )}
@@ -535,14 +571,21 @@ export function PropertyDetail() {
                     <button
                       key={`${item.kind}-${item.src}-${index}`}
                       type="button"
-                      onClick={() => setActiveMedia(item)}
+                      onClick={() => setActiveMediaIndex(index)}
                       className={`h-16 w-24 shrink-0 overflow-hidden rounded-[12px] border transition-all duration-200 ${
-                        activeMedia.kind === item.kind && activeMedia.src === item.src ? "border-sky-400 ring-2 ring-sky-300/40 shadow-lg" : "border-slate-300 hover:border-slate-400 hover:shadow-md"
+                        activeMediaIndex === index ? "border-sky-400 ring-2 ring-sky-300/40 shadow-lg" : "border-slate-300 hover:border-slate-400 hover:shadow-md"
                       }`}
                     >
                       {item.kind === "video" ? (
                         <div className="relative h-full w-full bg-slate-800">
-                          <ImageWithFallback src={property.image} alt={`${property.title} video`} className="h-full w-full object-cover opacity-70" />
+                          <video
+                            src={item.src}
+                            className="h-full w-full object-cover"
+                            muted
+                            playsInline
+                            preload="metadata"
+                          />
+                          <div className="absolute inset-0 bg-slate-950/18" />
                           <span className="absolute inset-0 flex items-center justify-center text-white">
                             <PlayCircle className="h-6 w-6" />
                           </span>

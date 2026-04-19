@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { Bed, Bath, Heart, Maximize, MapPin, PlayCircle } from "lucide-react";
+import { Bed, Bath, Heart, Maximize, MapPin } from "lucide-react";
 import { Property } from "../data/properties";
 import { formatPrice } from "../utils/format";
 import { getFavoriteIds, hasActiveAuthSession, toggleFavoriteId } from "../utils/storage";
@@ -12,7 +12,15 @@ interface PropertyCardProps {
 export function PropertyCard({ property }: PropertyCardProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   const [isVideoBroken, setIsVideoBroken] = useState(false);
+  const [isHoverCapable, setIsHoverCapable] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+  const articleRef = useRef<HTMLElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const showcaseVideoSrc = property.videoUrl?.trim() || null;
+  const fallbackImageSrc = [property.gallery?.[0], property.image]
+    .map((item) => item?.trim() || "")
+    .find((item) => item.length > 0) || null;
 
   useEffect(() => {
     setIsFavorite(getFavoriteIds().includes(property.id));
@@ -21,6 +29,68 @@ export function PropertyCard({ property }: PropertyCardProps) {
   useEffect(() => {
     setIsVideoBroken(false);
   }, [showcaseVideoSrc]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const updateHoverCapability = () => setIsHoverCapable(mediaQuery.matches);
+
+    updateHoverCapability();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateHoverCapability);
+      return () => mediaQuery.removeEventListener("change", updateHoverCapability);
+    }
+
+    mediaQuery.addListener(updateHoverCapability);
+    return () => mediaQuery.removeListener(updateHoverCapability);
+  }, []);
+
+  useEffect(() => {
+    const article = articleRef.current;
+    if (!article || typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting && entry.intersectionRatio >= 0.6);
+      },
+      {
+        threshold: [0.25, 0.6, 0.85],
+      }
+    );
+
+    observer.observe(article);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !showcaseVideoSrc || isVideoBroken) {
+      return;
+    }
+
+    const shouldPlay = isHoverCapable ? isHovered : isVisible;
+
+    if (shouldPlay) {
+      const playPromise = video.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {
+          // Ignore autoplay interruptions from the browser.
+        });
+      }
+      return;
+    }
+
+    video.pause();
+  }, [isHoverCapable, isHovered, isVisible, isVideoBroken, showcaseVideoSrc]);
+
+  const shouldPlayVideo = Boolean(showcaseVideoSrc && !isVideoBroken && (isHoverCapable ? isHovered : isVisible));
 
   const handleFavoriteClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -35,27 +105,47 @@ export function PropertyCard({ property }: PropertyCardProps) {
   };
 
   return (
-    <article className="group overflow-hidden rounded-[20px] border border-white/60 bg-white shadow-[0_18px_34px_rgba(15,23,42,0.08)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(15,23,42,0.12)] sm:rounded-[28px]">
+    <article
+      ref={articleRef}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="group overflow-hidden rounded-[20px] border border-white/60 bg-white shadow-[0_18px_34px_rgba(15,23,42,0.08)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(15,23,42,0.12)] sm:rounded-[28px]"
+    >
       <div className="relative h-64 overflow-hidden sm:h-64 lg:h-80">
         <Link to={`/property/${property.id}`} target="_blank" rel="noopener noreferrer">
           {showcaseVideoSrc && !isVideoBroken ? (
             <video
+              ref={videoRef}
               src={showcaseVideoSrc}
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              autoPlay
               loop
               muted
               playsInline
-              poster={property.image || undefined}
-              preload="none"
+              preload="metadata"
+              onLoadedData={(event) => {
+                const video = event.currentTarget;
+                if (!shouldPlayVideo && video.currentTime === 0) {
+                  try {
+                    video.currentTime = 0.05;
+                  } catch {
+                    // Ignore browsers that disallow seeking before enough data is buffered.
+                  }
+                }
+              }}
               onError={() => setIsVideoBroken(true)}
             >
               Votre navigateur ne peut pas lire cette vidéo.
             </video>
+          ) : fallbackImageSrc ? (
+            <img
+              src={fallbackImageSrc}
+              alt={property.title}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              loading="lazy"
+            />
           ) : (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-slate-950 px-4 text-center text-sm font-semibold text-white">
-              <PlayCircle className="h-8 w-8 text-sky-300" />
-              <span>Vidéo indisponible</span>
+            <div className="flex h-full w-full items-center justify-center bg-slate-100 px-4 text-center text-sm font-semibold text-slate-500">
+              Aucun aperçu disponible
             </div>
           )}
         </Link>

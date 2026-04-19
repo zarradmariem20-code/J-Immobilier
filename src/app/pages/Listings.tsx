@@ -11,16 +11,23 @@ import { subscribeToPropertiesRealtime } from "../../lib/api";
 
 const propertyTypesByTransaction = {
   Vente: {
-    Habitation: ["Appartement", "Villa", "Immeuble"],
-    Commercial: ["Local commercial", "Bureau", "Usine"],
-    Terrain: ["Terrain", "Terrain agricole"],
+    residential: ["Appartement", "Villa", "Immeuble"],
+    business: ["Local commercial", "Bureau", "Usine"],
+    land: ["Terrain", "Terrain agricole"],
   },
   Location: {
-    Habitation: ["Appartement", "Villa"],
-    Commercial: ["Surface", "Bureau", "Usine"],
-    Terrain: [],
+    residential: ["Appartement", "Villa"],
+    business: ["Surface", "Bureau", "Usine"],
+    land: [],
   },
 };
+
+function normalizePropertyCategory(value: string) {
+  if (value === "Habitation") return "residential";
+  if (value === "Commercial") return "business";
+  if (value === "Terrain") return "land";
+  return value;
+}
 
 const propertyTypesWithRoomFilters = new Set(["Appartement", "Villa", "Immeuble"]);
 
@@ -30,7 +37,7 @@ export function Listings() {
   const [transactionType, setTransactionType] = useState<string>(searchParams.get("transaction") ?? "all");
   const [selectedRegion, setSelectedRegion] = useState<string>(searchParams.get("region") ?? "all");
   const [selectedCity, setSelectedCity] = useState<string>(searchParams.get("city") ?? "all");
-  const [propertyCategory, setPropertyCategory] = useState<string>(searchParams.get("category") ?? "all");
+  const [propertyCategory, setPropertyCategory] = useState<string>(normalizePropertyCategory(searchParams.get("category") ?? "all"));
   const [priceRange, setPriceRange] = useState<string>(searchParams.get("price") ?? "all");
   const [searchTerm, setSearchTerm] = useState<string>(searchParams.get("q") ?? "");
   const [bedroomFilter, setBedroomFilter] = useState<string>(searchParams.get("bedrooms") ?? "all");
@@ -52,9 +59,9 @@ export function Listings() {
   const [isLoading, setIsLoading] = useState(() => !hasCachedPublicProperties());
 
   const combinedPropertyGroups = {
-    Habitation: Array.from(new Set([...propertyTypesByTransaction.Vente.Habitation, ...propertyTypesByTransaction.Location.Habitation])),
-    Commercial: Array.from(new Set([...propertyTypesByTransaction.Vente.Commercial, ...propertyTypesByTransaction.Location.Commercial])),
-    Terrain: Array.from(new Set([...propertyTypesByTransaction.Vente.Terrain, ...propertyTypesByTransaction.Location.Terrain])),
+    residential: Array.from(new Set([...propertyTypesByTransaction.Vente.residential, ...propertyTypesByTransaction.Location.residential])),
+    business: Array.from(new Set([...propertyTypesByTransaction.Vente.business, ...propertyTypesByTransaction.Location.business])),
+    land: Array.from(new Set([...propertyTypesByTransaction.Vente.land, ...propertyTypesByTransaction.Location.land])),
   };
 
   const basePropertyGroups = transactionType === "Vente"
@@ -263,12 +270,12 @@ export function Listings() {
   const getPropertyCategory = (type: string) => {
     const normalizedType = type.toLowerCase();
     if (normalizedType.includes("terrain")) {
-      return "Terrain";
+      return "land";
     }
     if (["local commercial", "bureau", "usine", "surface"].includes(normalizedType)) {
-      return "Commercial";
+      return "business";
     }
-    return "Habitation";
+    return "residential";
   };
 
   const filteredProperties = allProperties.filter((property) => {

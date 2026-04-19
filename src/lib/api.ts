@@ -972,6 +972,46 @@ async function uploadVideoFileViaBackend(file: File, options: VideoUploadOptions
   return payload.publicUrl as string;
 }
 
+async function uploadPhotoFileViaBackend(file: File) {
+  const { data } = await withTimeout(
+    supabase.auth.getSession(),
+    5_000,
+    "La recuperation de la session utilisateur prend trop de temps."
+  );
+  const accessToken = data.session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("Session utilisateur introuvable pour l'upload photo.");
+  }
+
+  const response = await withTimeout(
+    fetch(`${BACKEND_BASE_URL}/api/uploads/photo-upload`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": file.type || "image/jpeg",
+        "X-Upload-Filename": file.name,
+      },
+      body: file,
+    }),
+    90_000,
+    "L'envoi de la photo via le serveur prend trop de temps."
+  );
+
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok || !payload?.publicUrl) {
+    throw new Error(payload?.error || "Impossible d'envoyer la photo via le serveur.");
+  }
+
+  return payload.publicUrl as string;
+}
+
 export async function uploadVideoFileDirect(file: File, options: VideoUploadOptions = {}) {
   const headers = await getBackendAuthHeaders();
   let response: Response;
@@ -1088,7 +1128,7 @@ async function uploadMediaFile(file: File, folder: "photos" | "videos") {
 }
 
 export async function uploadAllMedia(photos: File[], videoFile?: File | null) {
-  const photoUrls = await Promise.all(photos.map((file) => uploadMediaFile(file, "photos")));
+  const photoUrls = await Promise.all(photos.map((file) => uploadPhotoFileViaBackend(file)));
   const videoUrl = videoFile
     ? await uploadVideoFileDirect(videoFile).catch(() => uploadMediaFile(videoFile, "videos"))
     : null;
