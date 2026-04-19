@@ -1,13 +1,20 @@
 import { supabase } from "./supabase";
 
+const DEFAULT_PRODUCTION_BACKEND_URL = "https://j-immobilier.onrender.com";
+
 function resolveDefaultBackendBaseUrl() {
   if (typeof window !== "undefined") {
-    const protocol = window.location.protocol === "https:" ? "https:" : "http:";
     const hostname = window.location.hostname || "localhost";
-    return `${protocol}//${hostname}:3001`;
+
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+      return `${protocol}//${hostname}:3001`;
+    }
+
+    return DEFAULT_PRODUCTION_BACKEND_URL;
   }
 
-  return "http://localhost:3001";
+  return DEFAULT_PRODUCTION_BACKEND_URL;
 }
 
 const BACKEND_BASE_URL = (import.meta.env.VITE_BACKEND_URL ?? resolveDefaultBackendBaseUrl()).replace(/\/$/, "");
