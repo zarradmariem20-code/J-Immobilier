@@ -491,77 +491,81 @@ export function PropertyDetail() {
 
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.65fr_0.95fr]">
             <div className="rounded-[24px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] p-3 sm:rounded-[28px] sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
-              <div
-                className={`relative overflow-hidden rounded-[18px] border border-slate-200/40 ${isPlayableActiveVideo ? "mx-auto w-full max-w-[360px] bg-slate-950 sm:max-w-[420px] md:max-w-[520px]" : "h-[240px] bg-white sm:h-[380px] md:h-[480px]"}`}
-                style={isPlayableActiveVideo ? { aspectRatio: activeVideoAspectRatio ?? "9 / 16" } : undefined}
-              >
-                {activeMedia.kind === "image" && activeMedia.src ? (
-                  <ImageWithFallback
-                    src={activeMedia.src}
-                    alt={property.title}
-                    className="h-full w-full object-cover"
-                  />
-                ) : isPlayableActiveVideo ? (
-                  <VideoPlayer
-                    src={activeMedia.src}
-                    poster={coverImage || galleryImages[0] || undefined}
-                    label={property.title}
-                    preload="auto"
-                    fit="contain"
-                    onAspectRatioChange={setActiveVideoAspectRatio}
-                    onError={() => setIsActiveVideoBroken(true)}
-                  />
-                ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-slate-950 px-6 text-center text-white">
-                    <PlayCircle className="h-12 w-12 text-sky-300" />
-                    <div>
-                      <p className="text-base font-semibold">Vidéo indisponible</p>
-                      <p className="mt-1 text-sm text-slate-300">Passez aux photos dans le carrousel pour voir les autres médias du bien.</p>
-                    </div>
-                  </div>
-                )}
-
+              <div className="flex items-center gap-2 sm:gap-3">
                 {mediaItems.length > 1 && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handlePrevImage}
-                      className="absolute left-3 top-3 rounded-full bg-white/95 backdrop-blur-sm p-2.5 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50 sm:left-4 sm:top-1/2 sm:-translate-y-1/2 sm:p-3"
-                      aria-label="Image précédente"
-                    >
-                      <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleNextImage}
-                      className="absolute right-3 top-3 rounded-full bg-white/95 backdrop-blur-sm p-2.5 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50 sm:right-4 sm:top-1/2 sm:-translate-y-1/2 sm:p-3"
-                      aria-label="Image suivante"
-                    >
-                      <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
-                    </button>
-                  </>
-                )}
-                {activeMedia.kind === "image" && (
                   <button
                     type="button"
-                    onClick={() => setIsFullscreenOpen(true)}
-                    className="absolute right-4 top-4 rounded-full bg-white/95 backdrop-blur-sm p-2.5 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50"
-                    aria-label="Agrandir l'image"
+                    onClick={handlePrevImage}
+                    className="shrink-0 rounded-full bg-white/95 p-2.5 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-slate-200 sm:p-3"
+                    aria-label="Image précédente"
                   >
-                    <Expand className="h-4 w-4" />
+                    <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
                   </button>
                 )}
 
-                {activeMedia.kind === "video" && isActiveVideoBroken && (
-                  <div className="absolute left-4 top-4 rounded-full bg-black/65 px-3 py-1 text-xs font-semibold text-white">
-                    Vidéo indisponible
-                  </div>
-                )}
+                <div
+                  className={`relative min-w-0 flex-1 overflow-hidden rounded-[18px] border border-slate-200/40 ${isPlayableActiveVideo ? "mx-auto w-full max-w-[360px] bg-slate-950 sm:max-w-[420px] md:max-w-[520px]" : "h-[240px] bg-white sm:h-[380px] md:h-[480px]"}`}
+                  style={isPlayableActiveVideo ? { aspectRatio: activeVideoAspectRatio ?? "9 / 16" } : undefined}
+                >
+                  {activeMedia.kind === "image" && activeMedia.src ? (
+                    <ImageWithFallback
+                      src={activeMedia.src}
+                      alt={property.title}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : isPlayableActiveVideo ? (
+                    <VideoPlayer
+                      src={activeMedia.src}
+                      poster={coverImage || galleryImages[0] || undefined}
+                      label={property.title}
+                      preload="auto"
+                      fit="contain"
+                      onAspectRatioChange={setActiveVideoAspectRatio}
+                      onError={() => setIsActiveVideoBroken(true)}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-slate-950 px-6 text-center text-white">
+                      <PlayCircle className="h-12 w-12 text-sky-300" />
+                      <div>
+                        <p className="text-base font-semibold">Vidéo indisponible</p>
+                        <p className="mt-1 text-sm text-slate-300">Passez aux photos dans le carrousel pour voir les autres médias du bien.</p>
+                      </div>
+                    </div>
+                  )}
 
-                {mediaItems.length > 0 && (
-                  <div className="absolute right-3 top-14 rounded-[10px] bg-black/55 backdrop-blur-sm px-3 py-1.5 text-xs font-semibold text-white border border-white/20 sm:right-4 sm:top-auto sm:bottom-4 sm:px-4 sm:py-2 sm:text-sm">
-                    {Math.max(1, activeMediaIndex + 1)} / {mediaItems.length}
-                  </div>
+                  {activeMedia.kind === "image" && (
+                    <button
+                      type="button"
+                      onClick={() => setIsFullscreenOpen(true)}
+                      className="absolute right-4 top-4 rounded-full bg-white/95 backdrop-blur-sm p-2.5 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50"
+                      aria-label="Agrandir l'image"
+                    >
+                      <Expand className="h-4 w-4" />
+                    </button>
+                  )}
+
+                  {activeMedia.kind === "video" && isActiveVideoBroken && (
+                    <div className="absolute left-4 top-4 rounded-full bg-black/65 px-3 py-1 text-xs font-semibold text-white">
+                      Vidéo indisponible
+                    </div>
+                  )}
+
+                  {mediaItems.length > 0 && (
+                    <div className="absolute right-3 top-14 rounded-[10px] bg-black/55 backdrop-blur-sm px-3 py-1.5 text-xs font-semibold text-white border border-white/20 sm:right-4 sm:top-auto sm:bottom-4 sm:px-4 sm:py-2 sm:text-sm">
+                      {Math.max(1, activeMediaIndex + 1)} / {mediaItems.length}
+                    </div>
+                  )}
+                </div>
+
+                {mediaItems.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleNextImage}
+                    className="shrink-0 rounded-full bg-white/95 p-2.5 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-slate-200 sm:p-3"
+                    aria-label="Image suivante"
+                  >
+                    <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+                  </button>
                 )}
               </div>
 
