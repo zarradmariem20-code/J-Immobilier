@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, LocateFixed, Save } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import { approveListingWithBackend, clearListingsCache, getProperties } from "../../lib/api";
+import { deriveLocationLabel, getCitiesForRegion, inferRegionCity, tunisiaRegionOptions } from "../data/locations";
 import {
   getAdminSession,
   getListingSubmissions,
@@ -13,6 +14,8 @@ type ListingFormState = {
   title: string;
   price: string;
   transactionType: "Vente" | "Location";
+  region: string;
+  city: string;
   location: string;
   mapLocationQuery: string;
   nearbyCommodities: string;
@@ -35,6 +38,8 @@ const emptyState: ListingFormState = {
   title: "",
   price: "",
   transactionType: "Vente",
+  region: "",
+  city: "",
   location: "",
   mapLocationQuery: "",
   nearbyCommodities: "",
@@ -61,10 +66,19 @@ function splitList(value: string) {
 }
 
 function toFormState(item: ListingSubmission): ListingFormState {
+  const inferredLocation = inferRegionCity({
+    region: item.region,
+    city: item.city,
+    location: item.location,
+    mapLocationQuery: item.mapLocationQuery,
+  });
+
   return {
     title: item.title,
     price: String(item.price ?? ""),
     transactionType: item.transactionType,
+    region: item.region ?? inferredLocation.region,
+    city: item.city ?? inferredLocation.city,
     location: item.location,
     mapLocationQuery: item.mapLocationQuery ?? "",
     nearbyCommodities: (item.nearbyCommodities ?? []).join(", "),
@@ -85,12 +99,21 @@ function toFormState(item: ListingSubmission): ListingFormState {
 }
 
 function mapDbRowToListing(row: any): ListingSubmission {
+  const inferredLocation = inferRegionCity({
+    region: row.region,
+    city: row.city,
+    location: row.location,
+    mapLocationQuery: row.map_location_query,
+  });
+
   return {
     id: `db-${row.id}`,
     publicId: Number(row.id),
     title: row.title ?? "Annonce publiée",
     price: Number(row.price ?? 0),
     transactionType: row.transaction_type === "Location" ? "Location" : "Vente",
+    region: row.region ?? inferredLocation.region,
+    city: row.city ?? inferredLocation.city,
     location: row.location ?? "",
     mapLocationQuery: row.map_location_query ?? "",
     nearbyCommodities: Array.isArray(row.nearby_commodities) ? row.nearby_commodities : [],
@@ -129,6 +152,7 @@ export function AdminEditListing() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isLocating, setIsLocating] = useState(false);
+  const cityOptions = getCitiesForRegion(formState.region);
 
   useEffect(() => {
     if (!adminSession) {
@@ -219,10 +243,12 @@ export function AdminEditListing() {
     const parsedBathrooms = Number(formState.bathrooms);
     const parsedArea = Number(formState.area);
 
-    if (!formState.title.trim() || !formState.location.trim() || !formState.propertyType.trim() || !Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+    if (!formState.title.trim() || !formState.region.trim() || !formState.city.trim() || !formState.propertyType.trim() || !Number.isFinite(parsedPrice) || parsedPrice <= 0) {
       setError("Merci de renseigner les champs obligatoires du bien.");
       return;
     }
+
+    const derivedLocation = deriveLocationLabel(formState.region, formState.city, formState.location);
 
     setSaving(true);
     setError("");
@@ -234,7 +260,9 @@ export function AdminEditListing() {
         title: formState.title.trim(),
         price: parsedPrice,
         transactionType: formState.transactionType,
-        location: formState.location.trim(),
+        region: formState.region.trim(),
+        city: formState.city.trim(),
+        location: derivedLocation,
         mapLocationQuery: formState.mapLocationQuery.trim() || undefined,
         nearbyCommodities,
         propertyType: formState.propertyType.trim(),
@@ -256,7 +284,9 @@ export function AdminEditListing() {
           title: formState.title.trim(),
           price: parsedPrice,
           transactionType: formState.transactionType,
-          location: formState.location.trim(),
+          region: formState.region.trim(),
+          city: formState.city.trim(),
+          location: derivedLocation,
           mapLocationQuery: formState.mapLocationQuery.trim(),
           nearbyCommodities,
           propertyType: formState.propertyType.trim(),
@@ -334,8 +364,28 @@ export function AdminEditListing() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-600">Localisation</label>
-                    <input value={formState.location} onChange={(e) => updateField("location", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-sky-400 focus:bg-white focus:outline-none" />
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-600">Region</label>
+                    <select value={formState.region} onChange={(e) => setFormState((current) => ({ ...current, region: e.target.value, city: "", location: deriveLocationLabel(e.target.value, "", current.location) }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:outline-none">
+                      <option value="">Selectionner une region</option>
+                      {tunisiaRegionOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-600">Ville</label>
+                    <select value={formState.city} onChange={(e) => setFormState((current) => ({ ...current, city: e.target.value, location: deriveLocationLabel(current.region, e.target.value, current.location) }))} disabled={!formState.region} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60">
+                      <option value="">{formState.region ? "Selectionner une ville" : "Choisissez d'abord une region"}</option>
+                      {cityOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-600">Localisation affichee</label>
+                    <input value={deriveLocationLabel(formState.region, formState.city, formState.location)} readOnly className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm text-slate-600 focus:outline-none" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold text-slate-600">Map / adresse precise</label>

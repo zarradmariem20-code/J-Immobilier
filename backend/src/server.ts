@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import adminRoutes from "./routes/admin.js";
+import uploadsRoutes from "./routes/uploads.js";
 
 const app = express();
 const port = Number.parseInt(process.env.PORT ?? "3001", 10);
@@ -46,6 +47,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/admin", adminRoutes);
+app.use("/api/uploads", uploadsRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

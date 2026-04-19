@@ -17,6 +17,8 @@ const PROPERTY_COLUMNS = [
   "title",
   "price",
   "transaction_type",
+  "region",
+  "city",
   "location",
   "map_location_query",
   "nearby_commodities",
@@ -164,11 +166,36 @@ export function subscribeToPropertiesRealtime(onChange: () => void) {
   };
 }
 
+function normalizeCreatedSubmissionRow(value: any) {
+  const candidate = Array.isArray(value) ? value[0] ?? null : value;
+
+  if (!candidate || typeof candidate !== "object") {
+    return null;
+  }
+
+  const parsedId = typeof candidate.id === "number"
+    ? candidate.id
+    : typeof candidate.id === "string" && candidate.id.trim().length > 0 && Number.isFinite(Number(candidate.id))
+      ? Number(candidate.id)
+      : null;
+
+  if (!parsedId) {
+    return null;
+  }
+
+  return {
+    ...candidate,
+    id: parsedId,
+  };
+}
+
 export interface ApprovalSubmissionPayload {
   id: string;
   title: string;
   price: number;
   transactionType: "Vente" | "Location";
+  region?: string;
+  city?: string;
   location: string;
   mapLocationQuery?: string;
   nearbyCommodities?: string[];
@@ -276,13 +303,24 @@ export async function deleteListingWithBackend(supabaseId: number): Promise<numb
   return payload.id;
 }
 
-async function getPropertiesFromBackend(limit?: number, includeArchived = false): Promise<any[]> {
+async function getPropertiesFromBackend(options?: {
+  limit?: number;
+  includeArchived?: boolean;
+  region?: string;
+  city?: string;
+}): Promise<any[]> {
   const params = new URLSearchParams();
-  if (typeof limit === "number" && Number.isFinite(limit)) {
-    params.set("limit", String(limit));
+  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
+    params.set("limit", String(options.limit));
   }
-  if (includeArchived) {
+  if (options?.includeArchived) {
     params.set("includeArchived", "true");
+  }
+  if (options?.region) {
+    params.set("region", options.region);
+  }
+  if (options?.city) {
+    params.set("city", options.city);
   }
   const query = params.toString() ? `?${params.toString()}` : "";
   const response = await withTimeout(
@@ -505,7 +543,7 @@ export async function getProperty(id: number, options?: { forceRefresh?: boolean
         writeStorageCache(storageKey, { at: Date.now(), data });
         return data;
       } catch {
-        const backendRows = await getPropertiesFromBackend(undefined, true);
+        const backendRows = await getPropertiesFromBackend({ includeArchived: true });
         const fallback = backendRows.find((row) => Number(row?.id) === id);
 
         if (!fallback) {
@@ -531,8 +569,14 @@ export async function toggleFavorite(propertyId: number) {
 }
 
 // Fetch all properties from Supabase
-export async function getProperties(options?: { limit?: number; forceRefresh?: boolean; includeArchived?: boolean }) {
-  const key = `limit:${options?.limit ?? "all"}:includeArchived:${options?.includeArchived ? "yes" : "no"}`;
+export async function getProperties(options?: {
+  limit?: number;
+  forceRefresh?: boolean;
+  includeArchived?: boolean;
+  region?: string;
+  city?: string;
+}) {
+  const key = `limit:${options?.limit ?? "all"}:includeArchived:${options?.includeArchived ? "yes" : "no"}:region:${options?.region ?? "all"}:city:${options?.city ?? "all"}`;
   const storageKey = `${LIST_STORAGE_PREFIX}${key}`;
   const cached = listCache.get(key);
   if (!options?.forceRefresh && cached && isFresh(cached.at, LIST_CACHE_TTL_MS) && cached.data.length > 0) {
@@ -564,9 +608,21 @@ export async function getProperties(options?: { limit?: number; forceRefresh?: b
         let rows: any[] = [];
 
         try {
-          rows = await getPropertiesFromBackend(options?.limit, true);
+          rows = await getPropertiesFromBackend({
+            limit: options?.limit,
+            includeArchived: true,
+            region: options?.region,
+            city: options?.city,
+          });
         } catch (backendError) {
           let query = supabase.from("properties").select(PROPERTY_COLUMNS).order("created_at", { ascending: false });
+
+          if (options?.region) {
+            query = query.eq("region", options.region);
+          }
+          if (options?.city) {
+            query = query.eq("city", options.city);
+          }
 
           if (options?.limit) {
             query = query.limit(options.limit);
@@ -606,9 +662,20 @@ export async function getProperties(options?: { limit?: number; forceRefresh?: b
       let rows: any[] = [];
 
       try {
-        rows = await getPropertiesFromBackend(options?.limit);
+        rows = await getPropertiesFromBackend({
+          limit: options?.limit,
+          region: options?.region,
+          city: options?.city,
+        });
       } catch (backendError) {
         let query = supabase.from("properties").select(PROPERTY_COLUMNS).order("created_at", { ascending: false });
+
+        if (options?.region) {
+          query = query.eq("region", options.region);
+        }
+        if (options?.city) {
+          query = query.eq("city", options.city);
+        }
 
         if (options?.limit) {
           query = query.limit(options.limit);
@@ -659,13 +726,17 @@ export async function getProperties(options?: { limit?: number; forceRefresh?: b
 // Create a new property listing, preferring the backend DB route so submissions are visible to admin.
 export async function createSubmission(data: any) {
   try {
-    const response = await fetch(`${BACKEND_BASE_URL}/api/admin/submissions/create`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ submission: data }),
-    });
+    const response = await withTimeout(
+      fetch(`${BACKEND_BASE_URL}/api/admin/submissions/create`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ submission: data }),
+      }),
+      15_000,
+      `Backend indisponible sur ${BACKEND_BASE_URL}. Vérifiez que le serveur backend (port 3001) est démarré.`
+    );
 
     let payload: any = null;
     try {
@@ -678,10 +749,14 @@ export async function createSubmission(data: any) {
       throw new Error(payload?.error || "Echec d'envoi via le backend.");
     }
 
-    const created = payload?.data ?? null;
+    const created = normalizeCreatedSubmissionRow(payload?.data ?? null);
+
+    if (!created) {
+      throw new Error("Réponse invalide du backend lors de la création de l'annonce.");
+    }
 
     clearListingsCache();
-    if (created?.id && typeof created.id === "number") {
+    if (created.id && typeof created.id === "number") {
       propertyCache.set(created.id, { at: Date.now(), data: created });
       writeStorageCache(`${PROPERTY_STORAGE_PREFIX}${created.id}`, { at: Date.now(), data: created });
     }
@@ -689,19 +764,33 @@ export async function createSubmission(data: any) {
 
     return created;
   } catch (backendError) {
-    const { data: result, error } = await supabase.from("properties").insert([data]).select();
+    const { data: result, error } = await withTimeout(
+      supabase.from("properties").insert([data]).select(),
+      15_000,
+      "L'envoi de l'annonce vers la base de donnees prend trop de temps. Merci de reessayer."
+    );
     if (error) {
       throw backendError instanceof Error ? backendError : error;
     }
 
+    const created = normalizeCreatedSubmissionRow(result);
+
+    if (!created) {
+      if (backendError instanceof Error) {
+        throw backendError;
+      }
+
+      throw new Error("L'annonce n'a pas pu être enregistrée côté base de données.");
+    }
+
     clearListingsCache();
-    if (result?.[0]?.id && typeof result[0].id === "number") {
-      propertyCache.set(result[0].id, { at: Date.now(), data: result[0] });
-      writeStorageCache(`${PROPERTY_STORAGE_PREFIX}${result[0].id}`, { at: Date.now(), data: result[0] });
+    if (created.id && typeof created.id === "number") {
+      propertyCache.set(created.id, { at: Date.now(), data: created });
+      writeStorageCache(`${PROPERTY_STORAGE_PREFIX}${created.id}`, { at: Date.now(), data: created });
     }
     emitPropertiesChanged();
 
-    return result?.[0] || null;
+    return created;
   }
 }
 
@@ -709,13 +798,17 @@ export async function updateSubmissionMedia(
   supabaseId: number,
   media: { image?: string; gallery?: string[]; video_url?: string | null },
 ) {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/submissions/${supabaseId}/media`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(media),
-  });
+  const response = await withTimeout(
+    fetch(`${BACKEND_BASE_URL}/api/admin/submissions/${supabaseId}/media`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(media),
+    }),
+    15_000,
+    "La mise a jour des medias prend trop de temps. Merci de reessayer."
+  );
 
   let payload: any = null;
   try {
@@ -747,6 +840,69 @@ function sanitizeFileName(value: string) {
     .replace(/^-|-$/g, "");
 }
 
+async function getBackendAuthHeaders() {
+  const { data } = await withTimeout(
+    supabase.auth.getSession(),
+    5_000,
+    "La recuperation de la session utilisateur prend trop de temps."
+  );
+  const accessToken = data.session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("Session utilisateur introuvable pour l'upload video.");
+  }
+
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${accessToken}`,
+  };
+}
+
+async function uploadVideoFileDirect(file: File) {
+  const headers = await getBackendAuthHeaders();
+  const response = await withTimeout(
+    fetch(`${BACKEND_BASE_URL}/api/uploads/video-sign`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        filename: file.name,
+        content_type: file.type || "video/mp4",
+      }),
+    }),
+    15_000,
+    "La preparation de l'upload video prend trop de temps."
+  );
+
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok || !payload?.uploadUrl || !payload?.publicUrl) {
+    throw new Error(payload?.error || "Impossible de preparer l'upload video.");
+  }
+
+  const uploadResponse = await withTimeout(
+    fetch(payload.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type || "video/mp4",
+      },
+      body: file,
+    }),
+    120_000,
+    "L'envoi direct de la video prend trop de temps."
+  );
+
+  if (!uploadResponse.ok) {
+    throw new Error("Echec d'envoi direct de la video.");
+  }
+
+  return payload.publicUrl as string;
+}
+
 async function uploadMediaFile(file: File, folder: "photos" | "videos") {
   const extension = file.name.includes(".")
     ? file.name.split(".").pop()?.toLowerCase()
@@ -760,11 +916,15 @@ async function uploadMediaFile(file: File, folder: "photos" | "videos") {
   const fileName = `${Date.now()}-${uniqueId}-${safeBaseName}.${extension}`;
   const filePath = `${folder}/${new Date().toISOString().slice(0, 10)}/${fileName}`;
 
-  const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(filePath, file, {
-    cacheControl: "3600",
-    upsert: false,
-    contentType: file.type || undefined,
-  });
+  const { error } = await withTimeout(
+    supabase.storage.from(MEDIA_BUCKET).upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || undefined,
+    }),
+    folder === "videos" ? 120_000 : 45_000,
+    `L'envoi de la ${folder === "videos" ? "video" : "photo"} prend trop de temps.`
+  );
 
   if (error) {
     throw new Error(`Impossible d'envoyer la ${folder === "videos" ? "video" : "photo"} : ${error.message}`);
@@ -781,7 +941,9 @@ async function uploadMediaFile(file: File, folder: "photos" | "videos") {
 
 export async function uploadAllMedia(photos: File[], videoFile?: File | null) {
   const photoUrls = await Promise.all(photos.map((file) => uploadMediaFile(file, "photos")));
-  const videoUrl = videoFile ? await uploadMediaFile(videoFile, "videos") : null;
+  const videoUrl = videoFile
+    ? await uploadVideoFileDirect(videoFile).catch(() => uploadMediaFile(videoFile, "videos"))
+    : null;
 
   return { photoUrls, videoUrl };
 }

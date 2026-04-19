@@ -4,6 +4,24 @@ import { Building2, Facebook, RefreshCw, X } from "lucide-react";
 import { getAuthProfile, isUserLoggedIn, setAuthSession, type AuthProfile } from "../utils/storage";
 import { supabase } from "../../lib/supabase";
 
+const DEFAULT_PRODUCTION_APP_URL = "https://j-immobilier.vercel.app";
+
+function resolveAuthRedirectBase() {
+  const configuredAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL ?? "").trim();
+  if (configuredAppUrl) {
+    return configuredAppUrl.replace(/\/$/, "");
+  }
+
+  if (typeof window === "undefined") {
+    return DEFAULT_PRODUCTION_APP_URL;
+  }
+
+  const { origin, hostname } = window.location;
+  const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+
+  return isLocalHost ? origin : DEFAULT_PRODUCTION_APP_URL;
+}
+
 interface LoginModalProps {
   isOpen: boolean;
   initialMode?: "login" | "listing";
@@ -152,7 +170,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: window.location.origin + "/auth-handler",
+          redirectTo: `${resolveAuthRedirectBase()}/auth-handler`,
           queryParams: provider === "google" ? { prompt: "select_account" } : undefined,
           scopes: provider === "facebook" ? "email public_profile" : undefined,
         },

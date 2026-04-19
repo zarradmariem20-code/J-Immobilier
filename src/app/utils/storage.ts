@@ -29,6 +29,8 @@ export interface ListingSubmission {
   title: string;
   price: number;
   transactionType: "Vente" | "Location";
+  region?: string;
+  city?: string;
   location: string;
   mapLocationQuery: string;
   nearbyCommodities: string[];
@@ -59,6 +61,8 @@ export interface FavoriteHistoryItem {
   propertyId: number;
   savedAt: string;
 }
+
+import { supabase } from "../../lib/supabase";
 
 const FAVORITES_KEY = "journal-immobilier-favorites";
 const INQUIRIES_KEY = "journal-immobilier-inquiries";
@@ -164,6 +168,30 @@ export function isUserLoggedIn(): boolean {
   // as long as we still have a profile with a provider and a display name.
   const profile = getAuthProfile();
   return Boolean(profile && profile.provider && (profile.email || profile.name));
+}
+
+export async function hasActiveAuthSession(): Promise<boolean> {
+  if (!isBrowser()) {
+    return false;
+  }
+
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    const hasUser = !error && Boolean(user);
+
+    if (!hasUser) {
+      clearAuthSession();
+    }
+
+    return hasUser;
+  } catch {
+    clearAuthSession();
+    return false;
+  }
 }
 
 export function getAuthProfile(): AuthProfile | null {

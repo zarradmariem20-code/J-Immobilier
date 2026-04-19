@@ -38,6 +38,8 @@ type CreateSubmissionBody = {
     title?: string;
     price?: number;
     transaction_type?: string;
+    region?: string;
+    city?: string;
     location?: string;
     map_location_query?: string;
     nearby_commodities?: string[];
@@ -62,6 +64,8 @@ type ApproveSubmissionBody = {
     title: string;
     price: number;
     transactionType: "Vente" | "Location";
+    region?: string;
+    city?: string;
     location: string;
     mapLocationQuery?: string;
     nearbyCommodities?: string[];
@@ -87,6 +91,8 @@ type InactivateSubmissionBody = {
 router.get("/properties", async (req, res) => {
   const limitRaw = req.query.limit;
   const includeArchived = req.query.includeArchived === "true";
+  const region = typeof req.query.region === "string" && req.query.region.trim().length > 0 ? req.query.region.trim() : null;
+  const city = typeof req.query.city === "string" && req.query.city.trim().length > 0 ? req.query.city.trim() : null;
   const parsedLimit =
     typeof limitRaw === "string" && limitRaw.trim().length > 0
       ? Number.parseInt(limitRaw, 10)
@@ -100,12 +106,37 @@ router.get("/properties", async (req, res) => {
       });
     }
 
+    const conditions: string[] = [];
+    const params: Array<string | number> = [];
+
+    if (!includeArchived) {
+      conditions.push("status = 'active'");
+    }
+
+    if (region) {
+      params.push(region);
+      conditions.push(`region = $${params.length}`);
+    }
+
+    if (city) {
+      params.push(city);
+      conditions.push(`city = $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const limitClause = limit ? `LIMIT $${params.length + 1}` : "";
+    if (limit) {
+      params.push(limit);
+    }
+
     const queryText = `
       SELECT
         id,
         title,
         price,
         transaction_type,
+        region,
+        city,
         location,
         map_location_query,
         nearby_commodities,
@@ -123,12 +154,12 @@ router.get("/properties", async (req, res) => {
         status,
         created_at
       FROM properties
-      ${includeArchived ? "" : "WHERE status = 'active'"}
+      ${whereClause}
       ORDER BY created_at DESC
-      ${limit ? "LIMIT $1" : ""}
+      ${limitClause}
     `;
 
-    const result = limit ? await dbPool.query(queryText, [limit]) : await dbPool.query(queryText);
+    const result = await dbPool.query(queryText, params);
     return res.json({ data: result.rows });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || "Backend properties fetch failed." });
@@ -160,6 +191,8 @@ router.post("/submissions/create", async (req, res) => {
         title,
         price,
         transaction_type,
+        region,
+        city,
         location,
         map_location_query,
         nearby_commodities,
@@ -176,7 +209,7 @@ router.post("/submissions/create", async (req, res) => {
         featured,
         status
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20
       )
       RETURNING *
       `,
@@ -184,6 +217,8 @@ router.post("/submissions/create", async (req, res) => {
         submission.title || "Annonce immobilière",
         submission.price ?? 0,
         submission.transaction_type || "Vente",
+        submission.region?.trim() || null,
+        submission.city?.trim() || null,
         submission.location || "Emplacement non précisé",
         submission.map_location_query || null,
         submission.nearby_commodities ?? [],
@@ -276,6 +311,8 @@ router.post("/submissions/approve", async (req, res) => {
     title: submission.title,
     price: submission.price,
     transaction_type: submission.transactionType,
+    region: submission.region?.trim() || null,
+    city: submission.city?.trim() || null,
     location: submission.location,
     map_location_query: submission.mapLocationQuery || null,
     nearby_commodities: submission.nearbyCommodities ?? [],
@@ -306,22 +343,24 @@ router.post("/submissions/approve", async (req, res) => {
           title = $1,
           price = $2,
           transaction_type = $3,
-          location = $4,
-          map_location_query = $5,
-          nearby_commodities = $6,
-          type = $7,
-          bedrooms = $8,
-          bathrooms = $9,
-          area = $10,
-          description = $11,
-          image = $12,
-          gallery = $13,
-          video_url = $14,
-          features = $15,
-          tags = $16,
-          featured = $17,
+          region = $4,
+          city = $5,
+          location = $6,
+          map_location_query = $7,
+          nearby_commodities = $8,
+          type = $9,
+          bedrooms = $10,
+          bathrooms = $11,
+          area = $12,
+          description = $13,
+          image = $14,
+          gallery = $15,
+          video_url = $16,
+          features = $17,
+          tags = $18,
+          featured = $19,
           status = 'active'
-        WHERE id = $18
+        WHERE id = $20
         RETURNING id
       `;
 
@@ -329,6 +368,8 @@ router.post("/submissions/approve", async (req, res) => {
         propertyPayload.title,
         propertyPayload.price,
         propertyPayload.transaction_type,
+        propertyPayload.region,
+        propertyPayload.city,
         propertyPayload.location,
         propertyPayload.map_location_query,
         propertyPayload.nearby_commodities,
@@ -393,6 +434,8 @@ router.post("/submissions/approve", async (req, res) => {
         title,
         price,
         transaction_type,
+        region,
+        city,
         location,
         map_location_query,
         nearby_commodities,
@@ -409,7 +452,7 @@ router.post("/submissions/approve", async (req, res) => {
         featured,
         status
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'active'
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'active'
       )
       RETURNING id
     `;
@@ -418,6 +461,8 @@ router.post("/submissions/approve", async (req, res) => {
       propertyPayload.title,
       propertyPayload.price,
       propertyPayload.transaction_type,
+      propertyPayload.region,
+      propertyPayload.city,
       propertyPayload.location,
       propertyPayload.map_location_query,
       propertyPayload.nearby_commodities,

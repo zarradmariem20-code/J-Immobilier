@@ -72,6 +72,8 @@ export type Database = {
           title: string
           transaction_type: string
           type: string
+          region: string | null
+          city: string | null
           updated_at: string | null
         }
         Insert: {
@@ -83,6 +85,8 @@ export type Database = {
           featured?: boolean | null
           features?: string[] | null
           gallery?: string[]
+          city?: string | null
+          region?: string | null
           id?: number
           image: string
           video_url?: string | null
@@ -101,6 +105,8 @@ export type Database = {
           area?: number
           bathrooms?: number
           bedrooms?: number
+          city?: string | null
+          region?: string | null
           created_at?: string | null
           description?: string | null
           featured?: boolean | null

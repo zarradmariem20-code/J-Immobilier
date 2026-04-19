@@ -2,10 +2,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
+import { VideoPlayer } from "../components/VideoPlayer";
 import { ArrowLeft, Bed, Bath, Maximize, MapPin, Check, Heart, CalendarDays, ChevronLeft, ChevronRight, Expand, Share2, Flag, MessageCircle, PhoneCall, PlayCircle, X } from "lucide-react";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { formatPrice } from "../utils/format";
-import { getFavoriteIds, isUserLoggedIn, toggleFavoriteId } from "../utils/storage";
+import { getFavoriteIds, hasActiveAuthSession, isUserLoggedIn, toggleFavoriteId } from "../utils/storage";
 import { PropertyCard } from "../components/PropertyCard";
 import type { Property } from "../data/properties";
 import { LoginModal } from "../components/LoginModal.tsx";
@@ -90,7 +91,9 @@ export function PropertyDetail() {
   const [submitMessageKind, setSubmitMessageKind] = useState<"info" | "success" | "error">("info");
   const [successPulse, setSuccessPulse] = useState(false);
   const [isActiveVideoBroken, setIsActiveVideoBroken] = useState(false);
+  const [activeVideoAspectRatio, setActiveVideoAspectRatio] = useState<number | null>(null);
   const activeMediaIndex = mediaItems.findIndex((item) => item.kind === activeMedia.kind && item.src === activeMedia.src);
+  const isPlayableActiveVideo = activeMedia.kind === "video" && Boolean(activeMedia.src) && !isActiveVideoBroken;
 
   const applyAuthUser = (user: any | null) => {
     if (!user) {
@@ -268,6 +271,7 @@ export function PropertyDetail() {
       setActiveMedia({ kind: "video", src: "" });
     }
     setIsActiveVideoBroken(false);
+    setActiveVideoAspectRatio(null);
     setIsFavorite(getFavoriteIds().includes(property.id));
     setFormState({
       fullName: isLoggedIn ? userProfile.fullName : "",
@@ -404,6 +408,7 @@ export function PropertyDetail() {
     ? property.nearbyCommodities
     : ["Écoles", "Supermarché", "Transport", "Pharmacie", "Restaurants"];
   const mapEmbedUrl = `https://www.google.com/maps?q=${encodeURIComponent(locationQuery)}&output=embed`;
+  const mapExternalUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
 
   const formatCompactCurrency = (value: number) => {
     if (value >= 1_000_000) {
@@ -451,22 +456,19 @@ export function PropertyDetail() {
 
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.65fr_0.95fr]">
             <div className="rounded-[24px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] p-3 sm:rounded-[28px] sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
-              <div className="relative h-[240px] overflow-hidden rounded-[18px] bg-white border border-slate-200/40 sm:h-[380px] md:h-[480px]">
-                {activeMedia.kind === "video" && activeMedia.src && !isActiveVideoBroken ? (
-                  <video
-                    key={activeMedia.src}
+              <div
+                className={`relative overflow-hidden rounded-[18px] border border-slate-200/40 ${isPlayableActiveVideo ? "mx-auto w-full max-w-[360px] bg-slate-950 sm:max-w-[420px] md:max-w-[520px]" : "h-[240px] bg-white sm:h-[380px] md:h-[480px]"}`}
+                style={isPlayableActiveVideo ? { aspectRatio: activeVideoAspectRatio ?? "9 / 16" } : undefined}
+              >
+                {isPlayableActiveVideo ? (
+                  <VideoPlayer
                     src={activeMedia.src}
-                    className="h-full w-full object-contain bg-black"
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    controls
-                    preload="metadata"
+                    label={property.title}
+                    preload="auto"
+                    fit="contain"
+                    onAspectRatioChange={setActiveVideoAspectRatio}
                     onError={() => setIsActiveVideoBroken(true)}
-                  >
-                    Votre navigateur ne peut pas lire cette vidéo.
-                  </video>
+                  />
                 ) : (
                   <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-slate-950 px-6 text-center text-white">
                     <PlayCircle className="h-12 w-12 text-sky-300" />
@@ -482,18 +484,18 @@ export function PropertyDetail() {
                     <button
                       type="button"
                       onClick={handlePrevImage}
-                      className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/95 backdrop-blur-sm p-3 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50"
+                      className="absolute left-3 top-3 rounded-full bg-white/95 backdrop-blur-sm p-2.5 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50 sm:left-4 sm:top-1/2 sm:-translate-y-1/2 sm:p-3"
                       aria-label="Image précédente"
                     >
-                      <ChevronLeft className="h-6 w-6" />
+                      <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
                     </button>
                     <button
                       type="button"
                       onClick={handleNextImage}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/95 backdrop-blur-sm p-3 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50"
+                      className="absolute right-3 top-3 rounded-full bg-white/95 backdrop-blur-sm p-2.5 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50 sm:right-4 sm:top-1/2 sm:-translate-y-1/2 sm:p-3"
                       aria-label="Image suivante"
                     >
-                      <ChevronRight className="h-6 w-6" />
+                      <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
                     </button>
                   </>
                 )}
@@ -515,7 +517,7 @@ export function PropertyDetail() {
                 )}
 
                 {mediaItems.length > 0 && (
-                  <div className="absolute bottom-4 right-4 rounded-[10px] bg-black/40 backdrop-blur-sm px-4 py-2 text-sm font-semibold text-white border border-white/20">
+                  <div className="absolute right-3 top-14 rounded-[10px] bg-black/55 backdrop-blur-sm px-3 py-1.5 text-xs font-semibold text-white border border-white/20 sm:right-4 sm:top-auto sm:bottom-4 sm:px-4 sm:py-2 sm:text-sm">
                     {Math.max(1, activeMediaIndex + 1)} / {mediaItems.length}
                   </div>
                 )}
@@ -553,7 +555,7 @@ export function PropertyDetail() {
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!isUserLoggedIn()) {
+                    if (!(await hasActiveAuthSession())) {
                       setLoginModalOpen(true);
                       return;
                     }
@@ -597,19 +599,21 @@ export function PropertyDetail() {
               </div>
 
               <div className="rounded-[20px] border border-slate-200 bg-white p-3 shadow-[0_18px_42px_rgba(15,23,42,0.08)] sm:rounded-[24px] sm:p-6">
-                <p className="text-2xl font-bold leading-none text-slate-950 sm:text-4xl">{formatPrice(property.price, property.transactionType)}</p>
-                <p className="mt-1 text-xs text-slate-500 sm:text-sm">{property.type} • {displayLocation}</p>
+                <div className="hidden sm:block">
+                  <p className="text-2xl font-bold leading-none text-slate-950 sm:text-4xl">{formatPrice(property.price, property.transactionType)}</p>
+                  <p className="mt-1 text-xs text-slate-500 sm:text-sm">{property.type} • {displayLocation}</p>
 
-                <div className="mt-4 grid gap-2 border-y border-slate-200 py-3 text-slate-700 sm:mt-5 sm:flex sm:flex-wrap sm:items-center sm:gap-4 sm:py-4">
-                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm"><Bed className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {property.bedrooms} Ch.</span>
-                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm"><Bath className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {property.bathrooms} SdB</span>
-                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm"><Maximize className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {property.area} m²</span>
+                  <div className="mt-4 grid gap-2 border-y border-slate-200 py-3 text-slate-700 sm:mt-5 sm:flex sm:flex-wrap sm:items-center sm:gap-4 sm:py-4">
+                    <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm"><Bed className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {property.bedrooms} Ch.</span>
+                    <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm"><Bath className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {property.bathrooms} SdB</span>
+                    <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm"><Maximize className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {property.area} m²</span>
+                  </div>
+
+                  <h3 className="mt-4 text-base font-semibold text-slate-900 sm:mt-5 sm:text-lg">{property.title}</h3>
+                  <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-500 sm:text-sm"><MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {displayLocation}</p>
                 </div>
 
-                <h3 className="mt-4 text-base font-semibold text-slate-900 sm:mt-5 sm:text-lg">{property.title}</h3>
-                <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-500 sm:text-sm"><MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {displayLocation}</p>
-
-                <div className="mt-4 grid grid-cols-1 gap-2 sm:mt-6 sm:grid-cols-2 sm:gap-3">
+                <div className="grid grid-cols-1 gap-2 sm:mt-6 sm:grid-cols-2 sm:gap-3">
                   <button type="button" onClick={() => handleContactClick("whatsapp")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:px-4 sm:py-3">
                     <MessageCircle className="h-4 w-4" /> WhatsApp
                   </button>
@@ -625,14 +629,14 @@ export function PropertyDetail() {
                     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700 sm:text-xs">Suivez-nous</p>
                     <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm">Retrouvez l'agence sur Facebook, Instagram et TikTok.</p>
                   </div>
-                  <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
                     {companySocialLinks.map((item) => (
                       <a
                         key={item.label}
                         href={item.href}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white transition duration-200 hover:-translate-y-0.5 hover:border-sky-200 sm:h-11 sm:w-11"
+                        className="flex h-11 w-full items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white transition duration-200 hover:-translate-y-0.5 hover:border-sky-200 sm:h-11 sm:w-11 sm:rounded-full"
                         aria-label={item.label}
                         title={item.label}
                       >
@@ -658,13 +662,6 @@ export function PropertyDetail() {
               <div className="bg-white rounded-[24px] p-5 shadow-lg sm:rounded-[32px] sm:p-8">
                 <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <div className="mb-3 flex flex-wrap gap-2">
-                      {property.tags.map((tag) => (
-                        <span key={tag} className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
                     <h1 className="mb-2 font-serif text-3xl font-semibold text-black sm:text-4xl">{property.title}</h1>
                     <div className="flex items-center gap-2 text-gray-600">
                       <MapPin className="h-5 w-5" />
@@ -744,27 +741,70 @@ export function PropertyDetail() {
                 </div>
               </div>
 
-              <div className="rounded-[32px] bg-slate-950 p-8 text-white shadow-lg">
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-300">Localisation & commodités</p>
-                <h2 className="mt-3 font-serif text-3xl font-semibold">Repérez le bien et les services à proximité</h2>
+              <div className="relative overflow-hidden rounded-[32px] border border-slate-800 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.18),transparent_28%),radial-gradient(circle_at_88%_12%,rgba(14,165,233,0.14),transparent_22%),linear-gradient(160deg,#020617_0%,#081225_48%,#0b1730_100%)] p-5 text-white shadow-[0_28px_70px_rgba(2,6,23,0.34)] sm:p-8">
+                <div className="pointer-events-none absolute -left-10 top-16 h-36 w-36 rounded-full bg-cyan-300/10 blur-3xl" />
+                <div className="pointer-events-none absolute right-0 top-0 h-28 w-28 rounded-full bg-sky-400/10 blur-3xl" />
 
-                <p className="mt-3 text-sm text-slate-300">
-                  Vérifiez cette localisation avec la description fournie par le propriétaire avant de planifier une visite.
-                </p>
+                <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="max-w-2xl">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-sky-300">Localisation & commodités</p>
+                    <h2 className="mt-3 font-serif text-3xl font-semibold leading-tight sm:text-[2.15rem]">Repérez le bien et les services à proximité</h2>
+                    <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-[15px]">
+                      Vérifiez cette localisation avec la description fournie par le propriétaire avant de planifier une visite.
+                    </p>
+                  </div>
 
-                <div className="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70">
-                  <iframe
-                    title="Carte de localisation"
-                    src={mapEmbedUrl}
-                    className="h-64 w-full"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
+                  <div className="grid gap-2 sm:grid-cols-2 lg:w-[19rem] lg:grid-cols-1">
+                    <div className="rounded-[20px] border border-white/10 bg-white/6 px-4 py-3 backdrop-blur-sm">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sky-200">Adresse repérée</p>
+                      <p className="mt-2 inline-flex items-start gap-2 text-sm font-medium text-white">
+                        <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-300" />
+                        <span>{displayMapLocation}</span>
+                      </p>
+                    </div>
+                    <div className="rounded-[20px] border border-white/10 bg-white/6 px-4 py-3 backdrop-blur-sm">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sky-200">Services signalés</p>
+                      <p className="mt-2 text-2xl font-semibold text-white">{nearbyCommodities.length}</p>
+                      <p className="text-xs text-slate-300">Repères utiles autour du bien</p>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="mt-5 flex flex-wrap gap-2">
+                <div className="relative z-10 mt-6 overflow-hidden rounded-[28px] border border-white/10 bg-slate-900/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                  <div className="flex items-center justify-between border-b border-white/10 bg-white/6 px-4 py-3 backdrop-blur-sm">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sky-200">Carte interactive</p>
+                      <p className="mt-1 text-sm font-medium text-white">{displayMapLocation}</p>
+                    </div>
+                    <a
+                      href={mapExternalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center rounded-full border border-sky-300/30 bg-sky-400/12 px-3 py-2 text-xs font-semibold text-sky-100 transition hover:border-sky-200/50 hover:bg-sky-400/20"
+                    >
+                      Ouvrir dans Maps
+                    </a>
+                  </div>
+
+                  <div className="relative">
+                    <iframe
+                      title="Carte de localisation"
+                      src={mapEmbedUrl}
+                      className="h-[18rem] w-full sm:h-[21rem]"
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-[linear-gradient(180deg,transparent_0%,rgba(2,6,23,0.28)_100%)]" />
+                  </div>
+                </div>
+
+                <div className="relative z-10 mt-5 flex flex-wrap gap-2.5">
                   {nearbyCommodities.map((item) => (
-                    <span key={item} className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-sm text-sky-100">
+                    <span
+                      key={item}
+                      className="inline-flex items-center gap-2 rounded-full border border-sky-300/16 bg-white/8 px-3.5 py-2 text-sm font-medium text-sky-50 backdrop-blur-sm"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-sky-300" />
                       {item}
                     </span>
                   ))}

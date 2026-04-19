@@ -29,6 +29,7 @@ function start(scriptName) {
     cwd: process.cwd(),
     env: process.env,
     stdio: 'inherit',
+    shell: process.platform === 'win32',
   });
 
   child.on('error', (error) => {

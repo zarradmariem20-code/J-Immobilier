@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
+  ChevronDown,
   Download,
   FileText,
   Clock3,
@@ -34,6 +35,7 @@ import { BrandLogo } from "../components/BrandLogo";
 import { approveListingWithBackend, clearListingsCache, deleteListingWithBackend, getProperties, inactivateListingWithBackend, getVisits, getVisitsAnalytics, subscribeToPropertiesRealtime, updateVisit } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
 import { VISIT_STATUS_LABELS, VISIT_STATUS_COLORS, formatVisitDate, formatVisitDateTime, isVisitOverdue } from "../data/visits";
+import { getCitiesForRegion, inferRegionCity, tunisiaRegionOptions } from "../data/locations";
 import type { Visit } from "../../lib/database.types";
 
 const statusChip: Record<ListingSubmission["status"], string> = {
@@ -102,6 +104,8 @@ export function Admin() {
   const [loginError, setLoginError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ListingSubmission["status"]>("all");
+  const [listingRegionFilter, setListingRegionFilter] = useState<string>("all");
+  const [listingCityFilter, setListingCityFilter] = useState<string>("all");
 
   // Visits state
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -138,6 +142,8 @@ export function Admin() {
 
   const ADMIN_EMAIL = "admin@tawla.tn";
   const ADMIN_PASSWORD = "Admin@2026";
+  const listingCityOptions = listingRegionFilter !== "all" ? getCitiesForRegion(listingRegionFilter) : [];
+  const getAdminFilterSelectClass = (hasValue: boolean) => `h-full w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2 pr-9 text-xs font-semibold transition focus:border-sky-300 focus:outline-none ${hasValue ? "text-slate-700" : "text-slate-500"}`;
 
   useEffect(() => {
     const syncAll = () => {
@@ -226,6 +232,8 @@ export function Admin() {
           title: row.title ?? "Annonce publiée",
           price: Number(row.price ?? 0),
           transactionType: row.transaction_type === "Location" ? "Location" : "Vente",
+          region: row.region ?? undefined,
+          city: row.city ?? undefined,
           location: row.location ?? "-",
           mapLocationQuery: row.map_location_query ?? "",
           nearbyCommodities: Array.isArray(row.nearby_commodities) ? row.nearby_commodities : [],
@@ -329,11 +337,25 @@ export function Admin() {
     if (activeView === "listings") {
       const listingStatus = params.get("status");
       const listingQuery = params.get("q");
+      const listingRegion = params.get("region");
+      const listingCity = params.get("city");
       if (listingStatus === "all" || listingStatus === "pending" || listingStatus === "approved" || listingStatus === "rejected") {
         setStatusFilter(listingStatus);
       }
       if (typeof listingQuery === "string") {
         setSearchTerm(listingQuery);
+      }
+      if (typeof listingRegion === "string" && listingRegion.length > 0) {
+        setListingRegionFilter(listingRegion);
+      }
+      if (typeof listingCity === "string" && listingCity.length > 0) {
+        setListingCityFilter(listingCity);
+      }
+      if (!listingRegion) {
+        setListingRegionFilter("all");
+      }
+      if (!listingCity) {
+        setListingCityFilter("all");
       }
     }
 
@@ -876,18 +898,28 @@ export function Admin() {
     const needle = searchTerm.trim().toLowerCase();
 
     return allItems.filter((item) => {
+      const inferredLocation = inferRegionCity({
+        region: item.region,
+        city: item.city,
+        location: item.location,
+        mapLocationQuery: item.mapLocationQuery,
+      });
+      const itemRegion = item.region ?? inferredLocation.region;
+      const itemCity = item.city ?? inferredLocation.city;
       const matchesStatus = statusFilter === "all" ? true : item.status === statusFilter;
       const matchesSearch =
         needle.length === 0
           ? true
-          : [item.title, item.location, item.propertyType, item.fullName, item.email]
+          : [item.title, item.propertyType, item.fullName, item.email]
               .join(" ")
               .toLowerCase()
               .includes(needle);
+      const matchesRegion = listingRegionFilter === "all" ? true : itemRegion === listingRegionFilter;
+      const matchesCity = listingCityFilter === "all" ? true : itemCity === listingCityFilter;
 
-      return matchesStatus && matchesSearch;
+      return matchesStatus && matchesSearch && matchesRegion && matchesCity;
     });
-  }, [allItems, searchTerm, statusFilter]);
+  }, [allItems, listingCityFilter, listingRegionFilter, searchTerm, statusFilter]);
 
   const latestPending = useMemo(
     () => allItems.find((item) => item.status === "pending") ?? null,
@@ -1090,9 +1122,13 @@ export function Admin() {
     return dashboardInsights.todayTodo.slice(startIndex, startIndex + PAGE_SIZE);
   }, [dashboardInsights.todayTodo, dashboardTodoPage]);
 
+  const pendingListingsNotificationCount = metrics.pending;
+  const pendingVisitsNotificationCount = visitsKpis.newCount;
+  const totalPendingNotifications = pendingListingsNotificationCount + pendingVisitsNotificationCount;
+
   useEffect(() => {
     setListingsPage(1);
-  }, [searchTerm, statusFilter, activeView]);
+  }, [listingCityFilter, listingRegionFilter, searchTerm, statusFilter, activeView]);
 
   useEffect(() => {
     const availableIds = new Set(allItems.map((item) => item.id));
@@ -1119,7 +1155,7 @@ export function Admin() {
     setDashboardTodoPage((current) => Math.min(current, totalDashboardTodoPages));
   }, [totalDashboardTodoPages]);
 
-  const hasListingFiltersApplied = statusFilter !== "all" || searchTerm.trim().length > 0 || (activeView === "listings" && location.search.length > 0);
+  const hasListingFiltersApplied = statusFilter !== "all" || searchTerm.trim().length > 0 || listingRegionFilter !== "all" || listingCityFilter !== "all" || (activeView === "listings" && location.search.length > 0);
   const hasVisitFiltersApplied =
     visitStatusFilter !== "all"
     || visitPropertyQuery.trim().length > 0
@@ -1130,6 +1166,8 @@ export function Admin() {
   const clearListingFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
+    setListingRegionFilter("all");
+    setListingCityFilter("all");
     if (activeView === "listings" && location.search.length > 0) {
       navigate("/admin/listings", { replace: true });
     }
@@ -1247,6 +1285,8 @@ export function Admin() {
               title: submission.title,
               price: submission.price,
               transactionType: submission.transactionType,
+              region: submission.region,
+              city: submission.city,
               location: submission.location,
               mapLocationQuery: submission.mapLocationQuery || undefined,
               nearbyCommodities: submission.nearbyCommodities ?? [],
@@ -1295,6 +1335,8 @@ export function Admin() {
           title: freshSubmission.title,
           price: freshSubmission.price,
           transactionType: freshSubmission.transactionType,
+          region: freshSubmission.region,
+          city: freshSubmission.city,
           location: freshSubmission.location,
           mapLocationQuery: freshSubmission.mapLocationQuery || undefined,
           nearbyCommodities: freshSubmission.nearbyCommodities ?? [],
@@ -1511,9 +1553,9 @@ export function Admin() {
   const weeklySeries = trafficSeries;
 
   const sidebarItems = [
-    { key: "listings", label: "Annonces", icon: Clock3, path: "/admin/listings" },
-    { key: "visits", label: "Visites", icon: CalendarDays, path: "/admin/visits" },
-    { key: "contracts", label: "Contrats", icon: FileText, path: "/admin/contracts" },
+    { key: "listings", label: "Annonces", icon: Clock3, path: "/admin/listings", badgeCount: pendingListingsNotificationCount },
+    { key: "visits", label: "Visites", icon: CalendarDays, path: "/admin/visits", badgeCount: pendingVisitsNotificationCount },
+    { key: "contracts", label: "Contrats", icon: FileText, path: "/admin/contracts", badgeCount: 0 },
   ] as const;
 
   return (
@@ -1550,7 +1592,14 @@ export function Admin() {
                     <span className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${active ? "bg-white/15" : "bg-slate-100"}`}>
                       <Icon className="h-4.5 w-4.5" />
                     </span>
-                    <span>{item.label}</span>
+                    <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                      <span>{item.label}</span>
+                      {item.badgeCount > 0 ? (
+                        <span className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                          {item.badgeCount > 99 ? "99+" : item.badgeCount}
+                        </span>
+                      ) : null}
+                    </span>
                   </button>
                 );
               })}
@@ -1566,6 +1615,41 @@ export function Admin() {
           </button>
         </aside>
         <main className="w-full flex-1 space-y-4 sm:space-y-5">
+          {totalPendingNotifications > 0 && (
+            <div className="rounded-[22px] border border-rose-200 bg-[linear-gradient(135deg,#fff1f2_0%,#fff7ed_100%)] px-4 py-3 shadow-[0_12px_28px_rgba(244,63,94,0.08)] sm:px-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">Notifications admin</p>
+                  <p className="mt-1 text-sm font-medium text-slate-900">
+                    {pendingListingsNotificationCount > 0 ? `${pendingListingsNotificationCount} annonce${pendingListingsNotificationCount > 1 ? "s" : ""} en attente` : ""}
+                    {pendingListingsNotificationCount > 0 && pendingVisitsNotificationCount > 0 ? " • " : ""}
+                    {pendingVisitsNotificationCount > 0 ? `${pendingVisitsNotificationCount} visite${pendingVisitsNotificationCount > 1 ? "s" : ""} en attente` : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {pendingListingsNotificationCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/admin/listings?status=pending")}
+                      className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-50"
+                    >
+                      Voir les annonces
+                    </button>
+                  )}
+                  {pendingVisitsNotificationCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/admin/visits?visitStatus=new&visitSortBy=status&visitSortDirection=desc")}
+                      className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-50"
+                    >
+                      Voir les visites
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="relative overflow-hidden rounded-[28px] border border-sky-200/70 bg-[radial-gradient(circle_at_12%_18%,rgba(125,211,252,0.18),transparent_24%),radial-gradient(circle_at_86%_16%,rgba(56,189,248,0.22),transparent_22%),linear-gradient(135deg,#0f172a_0%,#123d63_42%,#0b6fa4_70%,#0ea5e9_100%)] p-4 text-white shadow-[0_22px_46px_rgba(14,30,60,0.30)] sm:p-6">
             <div className="pointer-events-none absolute -left-10 top-16 h-36 w-36 rounded-full bg-cyan-300/12 blur-3xl" />
             <div className="pointer-events-none absolute right-8 top-0 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
@@ -1625,6 +1709,11 @@ export function Admin() {
                     >
                       <Icon className="h-4 w-4" />
                       {item.label}
+                      {item.badgeCount > 0 ? (
+                        <span className={`inline-flex min-w-[1.35rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-rose-500 text-white"}`}>
+                          {item.badgeCount > 99 ? "99+" : item.badgeCount}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -1997,20 +2086,54 @@ export function Admin() {
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Rechercher bien, client ou ville"
+                    placeholder="Rechercher bien, client ou email"
                     className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-xs font-semibold text-slate-700 placeholder:font-medium placeholder:text-slate-400 focus:border-sky-300 focus:outline-none"
                   />
                 </div>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as "all" | ListingSubmission["status"])}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-sky-300 focus:outline-none"
-                >
-                  <option value="all">Tous statuts</option>
-                  <option value="pending">En attente</option>
-                  <option value="approved">Visibles</option>
-                  <option value="rejected">Invisibles</option>
-                </select>
+                <div className="relative">
+                  <select
+                    value={listingRegionFilter}
+                    onChange={(e) => {
+                      const nextRegion = e.target.value;
+                      setListingRegionFilter(nextRegion);
+                      setListingCityFilter("all");
+                    }}
+                    className={getAdminFilterSelectClass(listingRegionFilter !== "all")}
+                  >
+                    <option value="all">Toutes les regions</option>
+                    {tunisiaRegionOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                </div>
+                <div className="relative">
+                  <select
+                    value={listingCityFilter}
+                    onChange={(e) => setListingCityFilter(e.target.value)}
+                    disabled={listingRegionFilter === "all"}
+                    className={`${getAdminFilterSelectClass(listingCityFilter !== "all")} disabled:cursor-not-allowed disabled:text-slate-400 disabled:opacity-60`}
+                  >
+                    <option value="all">{listingRegionFilter === "all" ? "Choisir une region" : "Toutes les villes"}</option>
+                    {listingCityOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                </div>
+                <div className="relative">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as "all" | ListingSubmission["status"])}
+                    className={getAdminFilterSelectClass(statusFilter !== "all")}
+                  >
+                    <option value="all">Tous statuts</option>
+                    <option value="pending">En attente</option>
+                    <option value="approved">Visibles</option>
+                    <option value="rejected">Invisibles</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                </div>
                 <button
                   type="button"
                   onClick={clearListingFilters}

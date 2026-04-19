@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Bed, Bath, Heart, Maximize, MapPin, PlayCircle } from "lucide-react";
 import { Property } from "../data/properties";
 import { formatPrice } from "../utils/format";
-import { getFavoriteIds, isUserLoggedIn, toggleFavoriteId } from "../utils/storage";
+import { getFavoriteIds, hasActiveAuthSession, toggleFavoriteId } from "../utils/storage";
 
 interface PropertyCardProps {
   property: Property;
@@ -13,7 +13,6 @@ export function PropertyCard({ property }: PropertyCardProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   const [isVideoBroken, setIsVideoBroken] = useState(false);
   const showcaseVideoSrc = property.videoUrl?.trim() || null;
-  const highlightBadges = Array.from(new Set([...(property.tags ?? []), ...(property.features ?? [])])).slice(0, 3);
 
   useEffect(() => {
     setIsFavorite(getFavoriteIds().includes(property.id));
@@ -23,11 +22,11 @@ export function PropertyCard({ property }: PropertyCardProps) {
     setIsVideoBroken(false);
   }, [showcaseVideoSrc]);
 
-  const handleFavoriteClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleFavoriteClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
 
-    if (!isUserLoggedIn()) {
+    if (!(await hasActiveAuthSession())) {
       window.dispatchEvent(new CustomEvent("open-auth-modal", { detail: { mode: "login" } }));
       return;
     }
@@ -37,18 +36,18 @@ export function PropertyCard({ property }: PropertyCardProps) {
 
   return (
     <article className="group overflow-hidden rounded-[20px] border border-white/60 bg-white shadow-[0_18px_34px_rgba(15,23,42,0.08)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(15,23,42,0.12)] sm:rounded-[28px]">
-      <div className="relative h-40 overflow-hidden sm:h-64 lg:h-80">
+      <div className="relative h-64 overflow-hidden sm:h-64 lg:h-80">
         <Link to={`/property/${property.id}`} target="_blank" rel="noopener noreferrer">
           {showcaseVideoSrc && !isVideoBroken ? (
             <video
-              key={showcaseVideoSrc}
               src={showcaseVideoSrc}
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               autoPlay
               loop
               muted
               playsInline
-              preload="metadata"
+              poster={property.image || undefined}
+              preload="none"
               onError={() => setIsVideoBroken(true)}
             >
               Votre navigateur ne peut pas lire cette vidéo.
@@ -80,29 +79,20 @@ export function PropertyCard({ property }: PropertyCardProps) {
           </button>
         </div>
       </div>
-      <div className="p-3 sm:p-5">
-        <div className="mb-1.5 flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="p-2.5 sm:p-5">
+        <div className="mb-1 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-1.5">
           <Link to={`/property/${property.id}`} className="min-w-0 pr-0 sm:pr-4" target="_blank" rel="noopener noreferrer">
-            <h3 className="line-clamp-2 min-h-[2.4rem] text-sm font-semibold leading-tight text-slate-950 sm:min-h-[3.5rem] sm:text-xl">{property.title}</h3>
+            <h3 className="line-clamp-1 min-h-[1.25rem] text-sm font-semibold leading-tight text-slate-950 sm:line-clamp-2 sm:min-h-[3.5rem] sm:text-xl">{property.title}</h3>
           </Link>
           <p className="shrink-0 whitespace-nowrap text-left text-sm font-bold text-sky-700 sm:text-right sm:text-lg">
             {formatPrice(property.price, property.transactionType)}
           </p>
         </div>
-        <div className="mb-2 flex items-center gap-1 text-slate-500 sm:mb-3">
+        <div className="mb-1.5 flex items-center gap-1 text-slate-500 sm:mb-3">
           <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           <span className="line-clamp-1 text-[11px] sm:text-sm">{property.location}</span>
         </div>
-        <p className="mb-2 line-clamp-2 text-[11px] leading-4 text-slate-600 sm:mb-3 sm:text-sm sm:leading-6">{property.description}</p>
-        {highlightBadges.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-1.5 sm:mb-4 sm:gap-2">
-            {highlightBadges.map((badge) => (
-              <span key={badge} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-semibold text-sky-800 sm:px-2.5 sm:text-[11px]">
-                {badge}
-              </span>
-            ))}
-          </div>
-        )}
+        <p className="mb-1.5 line-clamp-1 text-[11px] leading-4 text-slate-600 sm:mb-3 sm:line-clamp-2 sm:text-sm sm:leading-6">{property.description}</p>
         <div className="flex w-full items-center justify-center text-slate-700">
           <div className="flex flex-1 items-center justify-center gap-1">
             <Bed className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -123,7 +113,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
           to={`/property/${property.id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 inline-flex w-full items-center justify-center rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-900 transition hover:border-sky-200 hover:text-sky-700 sm:mt-4 sm:w-auto sm:px-4 sm:text-sm"
+          className="mt-2.5 inline-flex w-full items-center justify-center rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-900 transition hover:border-sky-200 hover:text-sky-700 sm:mt-4 sm:w-auto sm:px-4 sm:text-sm"
         >
           Voir le détail
         </Link>

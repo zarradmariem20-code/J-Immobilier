@@ -34,6 +34,68 @@ body,
 	animation: reviewBoxPulse 3.8s ease-in-out infinite;
 }
 
+@keyframes socialShowcaseFloat {
+	0% {
+		transform: translate3d(0, 0, 0);
+	}
+	50% {
+		transform: translate3d(0, -8px, 0);
+	}
+	100% {
+		transform: translate3d(0, 0, 0);
+	}
+}
+
+@keyframes socialShowcaseDrift {
+	0% {
+		transform: translate3d(0, 0, 0) rotate(-2deg);
+	}
+	50% {
+		transform: translate3d(-4px, -10px, 0) rotate(-1deg);
+	}
+	100% {
+		transform: translate3d(0, 0, 0) rotate(-2deg);
+	}
+}
+
+@keyframes socialShowcaseGlow {
+	0% {
+		box-shadow: 0 30px 80px rgba(15, 23, 42, 0.24);
+	}
+	50% {
+		box-shadow: 0 38px 96px rgba(14, 165, 233, 0.20);
+	}
+	100% {
+		box-shadow: 0 30px 80px rgba(15, 23, 42, 0.24);
+	}
+}
+
+.social-showcase-float {
+	animation: socialShowcaseFloat 5.6s ease-in-out infinite;
+}
+
+.social-showcase-drift {
+	animation: socialShowcaseDrift 6.8s ease-in-out infinite;
+	transform-origin: center;
+}
+
+.social-showcase-glow {
+	animation: socialShowcaseGlow 5.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.review-box-animate,
+	.social-showcase-float,
+	.social-showcase-drift,
+	.social-showcase-glow {
+		animation: none;
+	}
+
+	* {
+		scroll-behavior: auto;
+	}
+}
+
 /* Global minimal brand scrollbar */
 * {
 	scrollbar-width: thin;

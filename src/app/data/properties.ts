@@ -1,3 +1,5 @@
+import { inferRegionCity } from "./locations";
+
 export interface Property {
   id: number;
   title: string;
@@ -6,6 +8,8 @@ export interface Property {
   location: string;
   mapLocationQuery?: string;
   nearbyCommodities?: string[];
+  region?: string;
+  city?: string;
   bedrooms: number;
   bathrooms: number;
   area: number;
@@ -25,6 +29,13 @@ export const properties: Property[] = []
  * Maps Supabase Property to local Property interface
  */
 export function mapSupabaseProperty(dbProperty: any): Property {
+  const inferredLocation = inferRegionCity({
+    region: dbProperty.region,
+    city: dbProperty.city,
+    location: dbProperty.location,
+    mapLocationQuery: dbProperty.map_location_query,
+  });
+
   return {
     id: Number(dbProperty.id ?? 0),
     title: String(dbProperty.title ?? "Annonce immobilière"),
@@ -33,6 +44,8 @@ export function mapSupabaseProperty(dbProperty: any): Property {
     location: String(dbProperty.location ?? "Emplacement non précisé"),
     mapLocationQuery: dbProperty.map_location_query ? String(dbProperty.map_location_query) : undefined,
     nearbyCommodities: Array.isArray(dbProperty.nearby_commodities) ? dbProperty.nearby_commodities : [],
+    region: dbProperty.region ? String(dbProperty.region) : inferredLocation.region || undefined,
+    city: dbProperty.city ? String(dbProperty.city) : inferredLocation.city || undefined,
     bedrooms: Number(dbProperty.bedrooms ?? 0),
     bathrooms: Number(dbProperty.bathrooms ?? 0),
     area: Number(dbProperty.area ?? 0),

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
 import { PropertyCard } from "../components/PropertyCard";
+import { getCitiesForRegion, tunisiaRegionOptions } from "../data/locations";
 import { ArrowLeft, BadgeDollarSign, Bath, BedDouble, Building2, ChevronDown, House, KeyRound, LandPlot, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import type { Property } from "../data/properties";
 import { getCachedPublicProperties, getPublicPropertiesAsync, hasCachedPublicProperties } from "../utils/publicListings";
@@ -21,10 +22,14 @@ const propertyTypesByTransaction = {
   },
 };
 
+const propertyTypesWithRoomFilters = new Set(["Appartement", "Villa", "Immeuble"]);
+
 export function Listings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [filterType, setFilterType] = useState<string>(searchParams.get("type") ?? "all");
   const [transactionType, setTransactionType] = useState<string>(searchParams.get("transaction") ?? "all");
+  const [selectedRegion, setSelectedRegion] = useState<string>(searchParams.get("region") ?? "all");
+  const [selectedCity, setSelectedCity] = useState<string>(searchParams.get("city") ?? "all");
   const [propertyCategory, setPropertyCategory] = useState<string>(searchParams.get("category") ?? "all");
   const [priceRange, setPriceRange] = useState<string>(searchParams.get("price") ?? "all");
   const [searchTerm, setSearchTerm] = useState<string>(searchParams.get("q") ?? "");
@@ -97,6 +102,9 @@ export function Listings() {
   ] as const;
   const selectedBudgetLabel = budgetOptions.find((item) => item.value === priceRange)?.label ?? "Tous les budgets";
   const selectedTransaction = transactionOptions.find((item) => item.value === transactionType) ?? transactionOptions[0];
+  const cityOptions = selectedRegion !== "all" ? getCitiesForRegion(selectedRegion) : [];
+  const getSelectTextClass = (hasValue: boolean) => hasValue ? "text-slate-900" : "text-slate-500";
+  const showRoomFilters = propertyTypesWithRoomFilters.has(filterType);
 
   const loadAllProperties = useCallback(async (withLoader = true) => {
     if (withLoader && allProperties.length === 0 && !hasCachedPublicProperties()) {
@@ -172,7 +180,7 @@ export function Listings() {
     filterBarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const fieldCardClass = "rounded-[10px] border border-slate-200/80 bg-white/80 px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition hover:border-sky-200 sm:rounded-[12px] sm:px-3";
+  const fieldCardClass = "min-w-0 rounded-[10px] border border-slate-200/80 bg-white/80 px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition hover:border-sky-200 sm:flex-1 sm:rounded-[12px] sm:px-3";
   const fieldLabelClass = "mb-1 block whitespace-nowrap text-center text-[9px] font-semibold uppercase tracking-[0.14em] leading-none text-slate-500 sm:text-[10px] sm:tracking-[0.16em]";
   const fieldInputClass = "h-5 w-full border-0 bg-transparent p-0 text-[13px] font-medium text-slate-900 whitespace-nowrap overflow-hidden text-ellipsis placeholder:font-normal placeholder:text-slate-400 focus:outline-none sm:h-6 sm:text-[14px]";
 
@@ -186,6 +194,12 @@ export function Listings() {
     }
     if (transactionType !== "all") {
       params.set("transaction", transactionType);
+    }
+    if (selectedRegion !== "all") {
+      params.set("region", selectedRegion);
+    }
+    if (selectedCity !== "all") {
+      params.set("city", selectedCity);
     }
     if (propertyCategory !== "all") {
       params.set("category", propertyCategory);
@@ -209,11 +223,25 @@ export function Listings() {
       params.set("recent", "1");
     }
     setSearchParams(params, { replace: true });
-  }, [bathroomFilter, bedroomFilter, featuredOnly, filterType, priceRange, propertyCategory, recentOnly, searchTerm, setSearchParams, sortBy, transactionType]);
+  }, [bathroomFilter, bedroomFilter, featuredOnly, filterType, priceRange, propertyCategory, recentOnly, searchTerm, selectedCity, selectedRegion, setSearchParams, sortBy, transactionType]);
 
   useEffect(() => {
     loadAllProperties(true);
   }, [loadAllProperties]);
+
+  useEffect(() => {
+    if (showRoomFilters) {
+      return;
+    }
+
+    if (bedroomFilter !== "all") {
+      setBedroomFilter("all");
+    }
+
+    if (bathroomFilter !== "all") {
+      setBathroomFilter("all");
+    }
+  }, [bathroomFilter, bedroomFilter, showRoomFilters]);
 
   useEffect(() => {
     const handleFocusRefresh = () => {
@@ -251,6 +279,14 @@ export function Listings() {
         .includes(searchTerm.trim().toLowerCase());
 
     if (!matchesSearch) {
+      return false;
+    }
+
+    if (selectedRegion !== "all" && property.region !== selectedRegion) {
+      return false;
+    }
+
+    if (selectedCity !== "all" && property.city !== selectedCity) {
       return false;
     }
 
@@ -360,7 +396,7 @@ export function Listings() {
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   className="h-full w-full border-0 bg-transparent p-0 text-[14px] font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none"
-                  placeholder="Ville, quartier, référence..."
+                  placeholder="Titre, ville ou reference..."
                 />
               </label>
               <button
@@ -383,7 +419,8 @@ export function Listings() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="rounded-[14px] border border-sky-200/80 bg-white/72 p-1.5 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md sm:rounded-[18px] sm:p-2">
             <div className="flex flex-col gap-3">
-              <div className="grid gap-2 xl:grid-cols-[1.4fr_1fr_1fr_0.78fr_0.9fr_1fr_auto]">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:flex-nowrap">
+                <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-nowrap">
                 <label className={fieldCardClass}>
                   <span className={fieldLabelClass}>Recherche</span>
                   <div className="flex items-center gap-2">
@@ -392,20 +429,52 @@ export function Listings() {
                       value={searchTerm}
                       onChange={(event) => setSearchTerm(event.target.value)}
                       className={fieldInputClass}
-                      placeholder="Ville, quartier"
+                      placeholder="Titre ou reference"
                     />
                   </div>
                 </label>
 
                 <label className={fieldCardClass}>
+                  <span className={fieldLabelClass}>Region</span>
+                  <select
+                    value={selectedRegion}
+                    onChange={(event) => {
+                      setSelectedRegion(event.target.value);
+                      setSelectedCity("all");
+                    }}
+                    className={`${fieldInputClass} appearance-none ${getSelectTextClass(selectedRegion !== "all")}`}
+                  >
+                    <option value="all">Toutes les regions</option>
+                    {tunisiaRegionOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className={fieldCardClass}>
+                  <span className={fieldLabelClass}>Ville</span>
+                  <select
+                    value={selectedCity}
+                    onChange={(event) => setSelectedCity(event.target.value)}
+                    disabled={selectedRegion === "all"}
+                    className={`${fieldInputClass} appearance-none ${getSelectTextClass(selectedCity !== "all")} disabled:cursor-not-allowed disabled:text-slate-400 disabled:opacity-60`}
+                  >
+                    <option value="all">{selectedRegion === "all" ? "Choisir une region" : "Toutes les villes"}</option>
+                    {cityOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className={fieldCardClass}>
                   <span className={fieldLabelClass}>Transaction</span>
-                  <div className="relative" ref={transactionRef}>
+                  <div className="relative min-w-0" ref={transactionRef}>
                     <button
                       type="button"
                       onClick={() => setTransactionOpen((prev) => !prev)}
-                      className={`${fieldInputClass} flex items-center justify-between gap-2 pr-1 text-left`}
+                      className={`${fieldInputClass} min-w-0 flex items-center justify-between gap-2 pr-1 text-left`}
                     >
-                      <span className="flex items-center gap-2 overflow-hidden">
+                      <span className="flex min-w-0 items-center gap-2 overflow-hidden">
                         <selectedTransaction.icon className="h-4 w-4 flex-shrink-0 text-slate-400" />
                         <span className={transactionType === "all" ? "truncate text-slate-500" : "truncate text-slate-900"}>
                           {selectedTransaction.label}
@@ -442,13 +511,13 @@ export function Listings() {
 
                 <label className={fieldCardClass}>
                   <span className={fieldLabelClass}>Type de bien</span>
-                  <div className="relative" ref={typeRef}>
+                  <div className="relative min-w-0" ref={typeRef}>
                     <button
                       type="button"
                       onClick={() => setTypeOpen((prev) => !prev)}
-                      className={`${fieldInputClass} flex items-center justify-between pr-1 text-left`}
+                      className={`${fieldInputClass} min-w-0 flex items-center justify-between gap-2 pr-1 text-left`}
                     >
-                      <span className={filterType === "all" ? "text-slate-500" : "text-slate-900"}>
+                      <span className={filterType === "all" ? "block min-w-0 truncate text-slate-500" : "block min-w-0 truncate text-slate-900"}>
                         {filterType === "all" ? "Type de bien" : filterType}
                       </span>
                       <ChevronDown className={`h-4 w-4 text-slate-500 transition ${typeOpen ? "rotate-180" : "rotate-0"}`} />
@@ -462,76 +531,72 @@ export function Listings() {
                         >
                           Type de bien
                         </button>
-                        {Object.entries(availablePropertyGroups).map(([groupLabel, items]) => (
-                          <div key={groupLabel} className="mb-1 last:mb-0">
-                            <p className="flex items-center gap-2 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
-                              {groupLabel === "Habitation" && <House className="h-3.5 w-3.5" />}
-                              {groupLabel === "Commercial" && <Building2 className="h-3.5 w-3.5" />}
-                              {groupLabel === "Terrain" && <LandPlot className="h-3.5 w-3.5" />}
-                              <span>{groupLabel}</span>
-                            </p>
-                            {items.map((item) => (
-                              <button
-                                key={item}
-                                type="button"
-                                onClick={() => { setFilterType(item); setTypeOpen(false); }}
-                                className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${filterType === item ? "bg-slate-950 text-white" : "text-slate-700 hover:bg-slate-100"}`}
-                              >
-                                {item}
-                              </button>
-                            ))}
-                          </div>
+                        {availablePropertyTypes.map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => { setFilterType(item); setTypeOpen(false); }}
+                            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${filterType === item ? "bg-slate-950 text-white" : "text-slate-700 hover:bg-slate-100"}`}
+                          >
+                            {item}
+                          </button>
                         ))}
                       </div>
                     )}
                   </div>
                 </label>
 
-                <label className={fieldCardClass}>
-                  <span className={fieldLabelClass}>Chambres</span>
-                  <div className="flex items-center gap-2">
-                    <BedDouble className="h-4 w-4 text-slate-400" />
-                    <select
-                      value={bedroomFilter}
-                      onChange={(event) => setBedroomFilter(event.target.value)}
-                      className={`${fieldInputClass} appearance-none`}
-                    >
-                      <option value="all">Chambres</option>
-                      <option value="1">1+</option>
-                      <option value="2">2+</option>
-                      <option value="3">3+</option>
-                      <option value="4">4+</option>
-                      <option value="5">5+</option>
-                    </select>
-                  </div>
-                </label>
+                {showRoomFilters ? (
+                  <>
+                    <label className={fieldCardClass}>
+                      <span className={fieldLabelClass}>Chambres</span>
+                      <div className="flex items-center gap-2">
+                        <BedDouble className="h-4 w-4 text-slate-400" />
+                        <select
+                          value={bedroomFilter}
+                          onChange={(event) => setBedroomFilter(event.target.value)}
+                          className={`${fieldInputClass} appearance-none ${getSelectTextClass(bedroomFilter !== "all")}`}
+                          style={{ color: bedroomFilter === "all" ? "#94a3b8" : "#0f172a" }}
+                        >
+                          <option value="all">Chambres</option>
+                          <option value="1">1+</option>
+                          <option value="2">2+</option>
+                          <option value="3">3+</option>
+                          <option value="4">4+</option>
+                          <option value="5">5+</option>
+                        </select>
+                      </div>
+                    </label>
 
-                <label className={fieldCardClass}>
-                  <span className={fieldLabelClass}>Salles de bain</span>
-                  <div className="flex items-center gap-2">
-                    <Bath className="h-4 w-4 text-slate-400" />
-                    <select
-                      value={bathroomFilter}
-                      onChange={(event) => setBathroomFilter(event.target.value)}
-                      className={`${fieldInputClass} appearance-none`}
-                    >
-                      <option value="all">Salles de bain</option>
-                      <option value="1">1+</option>
-                      <option value="2">2+</option>
-                      <option value="3">3+</option>
-                    </select>
-                  </div>
-                </label>
+                    <label className={fieldCardClass}>
+                      <span className={fieldLabelClass}>Salles de bain</span>
+                      <div className="flex items-center gap-2">
+                        <Bath className="h-4 w-4 text-slate-400" />
+                        <select
+                          value={bathroomFilter}
+                          onChange={(event) => setBathroomFilter(event.target.value)}
+                          className={`${fieldInputClass} appearance-none ${getSelectTextClass(bathroomFilter !== "all")}`}
+                          style={{ color: bathroomFilter === "all" ? "#94a3b8" : "#0f172a" }}
+                        >
+                          <option value="all">Salles de bain</option>
+                          <option value="1">1+</option>
+                          <option value="2">2+</option>
+                          <option value="3">3+</option>
+                        </select>
+                      </div>
+                    </label>
+                  </>
+                ) : null}
 
                 <label className={fieldCardClass}>
                   <span className={fieldLabelClass}>Budget</span>
-                  <div className="relative" ref={budgetRef}>
+                  <div className="relative min-w-0" ref={budgetRef}>
                     <button
                       type="button"
                       onClick={() => setBudgetOpen((prev) => !prev)}
-                      className={`${fieldInputClass} flex items-center justify-between pr-1 text-left`}
+                      className={`${fieldInputClass} min-w-0 flex items-center justify-between gap-2 pr-1 text-left`}
                     >
-                      <span className={priceRange === "all" ? "text-slate-500" : "text-slate-900"}>
+                      <span className={priceRange === "all" ? "block min-w-0 truncate text-slate-500" : "block min-w-0 truncate text-slate-900"}>
                         {selectedBudgetLabel}
                       </span>
                       <ChevronDown className={`h-4 w-4 text-slate-500 transition ${budgetOpen ? "rotate-180" : "rotate-0"}`} />
@@ -553,11 +618,13 @@ export function Listings() {
                   </div>
                 </label>
 
+                </div>
+
                 <button
                   type="button"
                   aria-label="Rechercher"
                   onClick={() => window.scrollTo({ top: 320, behavior: "smooth" })}
-                  className="inline-flex min-h-[56px] items-center justify-center rounded-[14px] bg-[linear-gradient(135deg,#1f5f96_0%,#174a75_100%)] px-4 text-white shadow-[0_10px_20px_rgba(31,95,150,0.28)] transition hover:brightness-110"
+                  className="inline-flex min-h-[56px] w-full items-center justify-center rounded-[14px] bg-[linear-gradient(135deg,#1f5f96_0%,#174a75_100%)] px-4 text-white shadow-[0_10px_20px_rgba(31,95,150,0.28)] transition hover:brightness-110 sm:ml-auto sm:w-[96px] sm:flex-none"
                 >
                   <Search className="h-5 w-5" />
                 </button>
@@ -574,7 +641,7 @@ export function Listings() {
               <div className="mb-6">
                 <p className="text-slate-500">Chargement des annonces...</p>
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, index) => (
                   <div
                     key={`listing-skeleton-${index}`}
@@ -636,7 +703,7 @@ export function Listings() {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
                 {filteredProperties.map((property) => (
                   <PropertyCard key={property.id} property={property} />
                 ))}
@@ -652,6 +719,8 @@ export function Listings() {
                   onClick={() => {
                     setFilterType("all");
                     setTransactionType("all");
+                    setSelectedRegion("all");
+                    setSelectedCity("all");
                     setPropertyCategory("all");
                     setPriceRange("all");
                     setSearchTerm("");

@@ -4,9 +4,10 @@ import { useNavigate } from "react-router";
 import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
 import { LoginModal } from "../components/LoginModal";
+import { deriveLocationLabel, getCitiesForRegion, tunisiaRegionOptions } from "../data/locations";
 import { supabase } from "../../lib/supabase";
 import { createSubmission, updateSubmissionMedia, uploadAllMedia } from "../../lib/api";
-import { createListingSubmission, getAuthProfile, isUserLoggedIn } from "../utils/storage";
+import { createListingSubmission, getAuthProfile, isUserLoggedIn, updateListingSubmission } from "../utils/storage";
 
 const nearbyCommodityOptions = [
   "Ecoles",
@@ -22,14 +23,6 @@ const nearbyCommodityOptions = [
   "Plage",
   "Parc",
 ];
-
-const quartierOptionsByCity: Record<string, string[]> = {
-  Tunis: ["Lac 1", "Lac 2", "Menzah", "Ennasr", "Montplaisir"],
-  "La Marsa": ["Sidi Abdelaziz", "Marsa Plage", "Marsa Ville", "Gammarth", "Bhar Lazreg"],
-  Sousse: ["Khzema", "Sahloul", "Khezama Est", "Riadh", "Corniche"],
-  Sfax: ["Sakiet Ezzit", "Sakiet Eddaier", "El Ain", "Bab Bhar", "Thyna"],
-  Hammamet: ["Yasmine Hammamet", "Mrezga", "Centre Ville", "Baraket Sahel", "Nabeul Nord"],
-};
 
 const propertyTypesByTransaction: Record<"Vente" | "Location", string[]> = {
   Vente: ["Terrain", "Villa", "Appartement", "Local commercial", "Usine", "Immeuble", "Terrain agricole", "Bureau"],
@@ -116,8 +109,8 @@ export function SubmitListing() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [transactionType, setTransactionType] = useState<"" | "Vente" | "Location">("");
+  const [region, setRegion] = useState("");
   const [city, setCity] = useState("");
-  const [quartier, setQuartier] = useState("");
   const [mapLocationQuery, setMapLocationQuery] = useState("");
   const [nearbyCommodities, setNearbyCommodities] = useState<string[]>([]);
   const [nearbyDetailsInput, setNearbyDetailsInput] = useState("");
@@ -144,7 +137,7 @@ export function SubmitListing() {
   const [isLoading, setIsLoading] = useState(false);
   const [submissionReceipt, setSubmissionReceipt] = useState<SubmissionReceipt | null>(null);
   const [isLocating, setIsLocating] = useState(false);
-  const quartierOptions = quartierOptionsByCity[city] ?? [];
+  const cityOptions = getCitiesForRegion(region);
   const allPropertyTypes = Array.from(new Set([
     ...propertyTypesByTransaction.Vente,
     ...propertyTypesByTransaction.Location,
@@ -348,6 +341,8 @@ export function SubmitListing() {
   const resetListingFields = () => {
     setListingTitle("");
     setListingPrice("");
+    setRegion("");
+    setCity("");
     setBedrooms("");
     setBathrooms("");
     setArea("");
@@ -358,7 +353,6 @@ export function SubmitListing() {
     setNearbyDetailsInput("");
     setIsFeatured(false);
     setListingDescription("");
-    setQuartier("");
     setMapLocationQuery("");
     setNearbyCommodities([]);
     photoPreviews.forEach((url) => URL.revokeObjectURL(url));
@@ -411,6 +405,10 @@ export function SubmitListing() {
       const parsedBathrooms = Number(bathrooms || 0);
       const parsedArea = Number(area || 0);
 
+      if (!region || !city) {
+        throw new Error("Merci de selectionner une region et une ville.");
+      }
+
       const normalizedTransactionType = (transactionType || "Vente") as "Vente" | "Location";
 
       const parseList = (value: string) =>
@@ -432,94 +430,61 @@ export function SubmitListing() {
         ...parseList(nearbyDetailsInput),
       ]));
 
-      const dbLocation = mapLocationQuery.trim() || [quartier.trim(), city.trim()].filter(Boolean).join(", ") || "Emplacement non precise";
+      const dbLocation = deriveLocationLabel(region, city);
       const fallbackTitle = listingTitle.trim() || "Annonce immobiliere";
       const fallbackType = propertyType || "Bien immobilier";
       const fallbackDescription = listingDescription.trim() || "Annonce en attente de validation.";
 
-      const remotePending = await withTimeout(
-        createSubmission({
-          title: fallbackTitle,
-          price: parsedPrice,
-          transaction_type: normalizedTransactionType,
-          location: dbLocation,
-          map_location_query: mapLocationQuery.trim() || quartier.trim() || city.trim() || null,
-          nearby_commodities: combinedNearbyCommodities,
-          type: fallbackType,
-          bedrooms: parsedBedrooms,
-          bathrooms: parsedBathrooms,
-          area: parsedArea,
-          description: fallbackDescription,
-          image: "",
-          gallery: [],
-          video_url: null,
-          features: combinedFeatures,
-          tags: combinedEquipment,
-          featured: false,
-          status: "pending",
-        }),
-        20000,
-        "L'envoi vers l'administration prend trop de temps. Merci de reessayer."
-      );
+      const remotePending = await createSubmission({
+        title: fallbackTitle,
+        price: parsedPrice,
+        transaction_type: normalizedTransactionType,
+        region,
+        city,
+        location: dbLocation,
+        map_location_query: mapLocationQuery.trim() || city.trim() || region.trim() || null,
+        nearby_commodities: combinedNearbyCommodities,
+        type: fallbackType,
+        bedrooms: parsedBedrooms,
+        bathrooms: parsedBathrooms,
+        area: parsedArea,
+        description: fallbackDescription,
+        image: "",
+        gallery: [],
+        video_url: null,
+        features: combinedFeatures,
+        tags: combinedEquipment,
+        featured: false,
+        status: "pending",
+      });
 
       if (!remotePending || typeof remotePending.id !== "number") {
         throw new Error("Annonce non transmise à l'administration.");
       }
 
-      let photoUrls: string[] = [];
-      let videoUrl: string | null = null;
-
-      if (photos.length > 0 || videoFile) {
-        try {
-          const mediaResult = await withTimeout(
-            uploadAllMedia(photos, videoFile),
-            180000,
-            "L'envoi des médias prend trop de temps. Merci de réessayer et de garder la page ouverte jusqu'à la fin."
-          );
-
-          photoUrls = mediaResult.photoUrls;
-          videoUrl = mediaResult.videoUrl;
-
-          if (videoFile && !videoUrl) {
-            throw new Error("La vidéo n'a pas pu être enregistrée. Merci de réessayer.");
-          }
-
-          if (photoUrls.length > 0 || videoUrl) {
-            await withTimeout(
-              updateSubmissionMedia(remotePending.id, {
-                image: photoUrls[0] || remotePending.image || "",
-                gallery: photoUrls,
-                video_url: videoUrl,
-              }),
-              15000,
-              "L'annonce a bien ete envoyee, mais l'ajout des medias prend trop de temps."
-            );
-          }
-        } catch (mediaError) {
-          console.error("Listing media upload failed:", mediaError);
-          setSubmissionNotice(
-            "L'annonce a bien ete envoyee a l'administration, mais les medias n'ont pas pu etre ajoutes automatiquement."
-          );
-        }
-      }
+      const submittedPhotos = [...photos];
+      const submittedVideoFile = videoFile;
+      const hasPendingMedia = submittedPhotos.length > 0 || Boolean(submittedVideoFile);
 
       const created = createListingSubmission({
         title: fallbackTitle,
         price: parsedPrice,
         transactionType: normalizedTransactionType,
+        region,
+        city,
         location: dbLocation,
-        mapLocationQuery: mapLocationQuery.trim() || quartier.trim() || city.trim() || dbLocation,
+        mapLocationQuery: mapLocationQuery.trim() || city.trim() || region.trim() || dbLocation,
         nearbyCommodities: combinedNearbyCommodities,
         propertyType: fallbackType,
         description: fallbackDescription,
         fullName: resolvedFullName,
         email: resolvedEmail,
         phone: phone.trim() || "Non renseigne",
-        photoCount: photoUrls.length,
-        hasVideo: Boolean(videoUrl),
-        videoUrl: videoUrl ?? undefined,
-        coverImage: photoUrls[0] || remotePending.image,
-        gallery: photoUrls.length > 0 ? photoUrls : remotePending.gallery,
+        photoCount: submittedPhotos.length,
+        hasVideo: Boolean(submittedVideoFile),
+        videoUrl: undefined,
+        coverImage: remotePending.image,
+        gallery: remotePending.gallery,
         bedrooms: parsedBedrooms,
         bathrooms: parsedBathrooms,
         area: parsedArea,
@@ -533,7 +498,58 @@ export function SubmitListing() {
         title: created.title,
         sentAt: new Date().toISOString(),
       });
+
+      if (hasPendingMedia) {
+        setSubmissionNotice("Annonce envoyee. Les medias continuent a se televerser en arriere-plan, gardez la page ouverte jusqu'a la fin.");
+      }
+
       resetListingFields();
+
+      if (hasPendingMedia) {
+        void (async () => {
+          try {
+            const mediaResult = await withTimeout(
+              uploadAllMedia(submittedPhotos, submittedVideoFile),
+              180000,
+              "L'envoi des medias prend trop de temps. Merci de reessayer et de garder la page ouverte jusqu'a la fin."
+            );
+
+            const photoUrls = mediaResult.photoUrls;
+            const videoUrl = mediaResult.videoUrl;
+
+            if (submittedVideoFile && !videoUrl) {
+              throw new Error("La video n'a pas pu etre enregistree. Merci de reessayer.");
+            }
+
+            if (photoUrls.length > 0 || videoUrl) {
+              await withTimeout(
+                updateSubmissionMedia(remotePending.id, {
+                  image: photoUrls[0] || remotePending.image || "",
+                  gallery: photoUrls,
+                  video_url: videoUrl,
+                }),
+                15000,
+                "L'annonce a bien ete envoyee, mais l'ajout des medias prend trop de temps."
+              );
+
+              updateListingSubmission(created.id, {
+                coverImage: photoUrls[0] || remotePending.image,
+                gallery: photoUrls.length > 0 ? photoUrls : remotePending.gallery,
+                photoCount: photoUrls.length,
+                hasVideo: Boolean(videoUrl),
+                videoUrl: videoUrl ?? undefined,
+              });
+            }
+
+            setSubmissionNotice("Annonce envoyee avec succes. Les medias ont ete ajoutes.");
+          } catch (mediaError) {
+            console.error("Listing media upload failed:", mediaError);
+            setSubmissionNotice(
+              "L'annonce a bien ete envoyee a l'administration, mais les medias n'ont pas pu etre ajoutes automatiquement."
+            );
+          }
+        })();
+      }
     } catch (error) {
       console.error("Submit listing failed:", error);
       setFormError(error instanceof Error ? error.message : "Échec de la soumission.");
@@ -752,25 +768,36 @@ export function SubmitListing() {
 
                 <div className="grid gap-3 md:grid-cols-2">
                   <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold text-slate-500">Ville</label>
-                    <input
-                      type="text"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="Ex: Tunis"
+                    <label className="mb-1.5 block text-[11px] font-semibold text-slate-500">Region</label>
+                    <select
+                      value={region}
+                      onChange={(e) => {
+                        const nextRegion = e.target.value;
+                        setRegion(nextRegion);
+                        setCity("");
+                      }}
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-[#1f5f96] focus:bg-white focus:outline-none"
-                    />
+                    >
+                      <option value="">Selectionner une region</option>
+                      {tunisiaRegionOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold text-slate-500">Quartier</label>
-                    <input
-                      type="text"
-                      value={quartier}
-                      onChange={(e) => setQuartier(e.target.value)}
-                      placeholder="Ex: Lac 2"
+                    <label className="mb-1.5 block text-[11px] font-semibold text-slate-500">Ville</label>
+                    <select
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      disabled={!region}
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-[#1f5f96] focus:bg-white focus:outline-none"
-                    />
+                    >
+                      <option value="">{region ? "Selectionner une ville" : "Choisissez d'abord une region"}</option>
+                      {cityOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="md:col-span-2">
