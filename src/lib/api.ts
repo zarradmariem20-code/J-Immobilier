@@ -924,18 +924,32 @@ async function uploadVideoFileViaBackend(file: File) {
 
 export async function uploadVideoFileDirect(file: File) {
   const headers = await getBackendAuthHeaders();
-  const response = await withTimeout(
-    fetch(`${BACKEND_BASE_URL}/api/uploads/video-sign`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        filename: file.name,
-        content_type: file.type || "video/mp4",
+  let response: Response;
+
+  try {
+    response = await withTimeout(
+      fetch(`${BACKEND_BASE_URL}/api/uploads/video-sign`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          filename: file.name,
+          content_type: file.type || "video/mp4",
+        }),
       }),
-    }),
-    15_000,
-    "La preparation de l'upload video prend trop de temps."
-  );
+      45_000,
+      "La preparation de l'upload video prend trop de temps."
+    );
+  } catch (error) {
+    if (error instanceof TypeError) {
+      return uploadVideoFileViaBackend(file);
+    }
+
+    if (error instanceof Error && error.message === "La preparation de l'upload video prend trop de temps.") {
+      return uploadVideoFileViaBackend(file);
+    }
+
+    throw error;
+  }
 
   let payload: any = null;
   try {
