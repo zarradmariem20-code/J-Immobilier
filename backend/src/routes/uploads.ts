@@ -1,11 +1,16 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
-import { generateVideoUploadUrl } from "../services/r2.js";
+import { generateVideoUploadUrl, isR2Configured } from "../services/r2.js";
 
 const router = Router();
 
 router.post("/video-sign", requireAuth, async (req, res, next) => {
   try {
+    if (!isR2Configured()) {
+      res.status(503).json({ error: "Le service de televersement video n'est pas configure sur le serveur." });
+      return;
+    }
+
     const filename = typeof req.body?.filename === "string" ? req.body.filename.trim() : "";
     const contentType = typeof req.body?.content_type === "string" ? req.body.content_type.trim() : "";
 
