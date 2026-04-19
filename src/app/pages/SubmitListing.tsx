@@ -132,6 +132,7 @@ export function SubmitListing() {
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
   const [photoError, setPhotoError] = useState("");
   const [videoError, setVideoError] = useState("");
   const [formError, setFormError] = useState("");
@@ -243,6 +244,7 @@ export function SubmitListing() {
     setVideoFile(null);
     setUploadedVideoUrl(null);
     setIsUploadingVideo(false);
+    setVideoUploadProgress(0);
     setVideoPreviewUrl((current) => {
       if (current) {
         URL.revokeObjectURL(current);
@@ -271,6 +273,7 @@ export function SubmitListing() {
 
       setVideoError("");
       setUploadedVideoUrl(null);
+      setVideoUploadProgress(0);
       setVideoFile(selected);
       const nextPreviewUrl = URL.createObjectURL(selected);
       setVideoPreviewUrl((current) => {
@@ -283,8 +286,11 @@ export function SubmitListing() {
       setIsUploadingVideo(true);
 
       try {
-        const uploadedUrl = await uploadVideoFileDirect(selected);
+        const uploadedUrl = await uploadVideoFileDirect(selected, {
+          onProgress: (progress) => setVideoUploadProgress(progress),
+        });
         setUploadedVideoUrl(uploadedUrl);
+        setVideoUploadProgress(100);
       } catch (uploadError) {
         console.error("Immediate video upload failed:", uploadError);
         setUploadedVideoUrl(null);
@@ -1008,6 +1014,24 @@ export function SubmitListing() {
                             >
                               <X className="h-4 w-4" />
                             </button>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className="h-full rounded-full bg-[linear-gradient(90deg,#0369a1_0%,#2563eb_100%)] transition-all duration-300"
+                                style={{ width: `${Math.max(videoUploadProgress, isUploadingVideo ? 6 : 0)}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
+                              <span>
+                                {isUploadingVideo
+                                  ? "Upload video en cours"
+                                  : uploadedVideoUrl
+                                    ? "Upload termine"
+                                    : "En attente d'upload"}
+                              </span>
+                              <span>{uploadedVideoUrl ? "100%" : `${videoUploadProgress}%`}</span>
+                            </div>
                           </div>
                           <p className="text-xs font-medium text-slate-500">
                             {isUploadingVideo

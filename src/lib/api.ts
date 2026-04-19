@@ -889,7 +889,44 @@ async function getBackendAuthHeaders() {
   };
 }
 
-async function uploadVideoFileViaBackend(file: File) {
+type VideoUploadOptions = {
+  onProgress?: (progress: number) => void;
+};
+
+function uploadFileWithProgress(options: {
+  url: string;
+  method: "PUT" | "POST";
+  headers: Record<string, string>;
+  file: File;
+  timeoutMs: number;
+  timeoutMessage: string;
+  onProgress?: (progress: number) => void;
+}) {
+  const { url, method, headers, file, timeoutMs, timeoutMessage, onProgress } = options;
+
+  return new Promise<XMLHttpRequest>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    xhr.timeout = timeoutMs;
+
+    Object.entries(headers).forEach(([key, value]) => {
+      xhr.setRequestHeader(key, value);
+    });
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+      }
+    };
+
+    xhr.onerror = () => reject(new TypeError("Failed to fetch"));
+    xhr.ontimeout = () => reject(new Error(timeoutMessage));
+    xhr.onload = () => resolve(xhr);
+    xhr.send(file);
+  });
+}
+
+async function uploadVideoFileViaBackend(file: File, options: VideoUploadOptions = {}) {
   const { data } = await withTimeout(
     supabase.auth.getSession(),
     5_000,
@@ -901,35 +938,41 @@ async function uploadVideoFileViaBackend(file: File) {
     throw new Error("Session utilisateur introuvable pour l'upload video.");
   }
 
-  const response = await withTimeout(
-    fetch(`${BACKEND_BASE_URL}/api/uploads/video-upload`, {
+  options.onProgress?.(0);
+
+  const response = await uploadFileWithProgress(
+    {
+      url: `${BACKEND_BASE_URL}/api/uploads/video-upload`,
       method: "PUT",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": file.type || "video/mp4",
         "X-Upload-Filename": file.name,
       },
-      body: file,
-    }),
-    180_000,
-    "L'envoi de la video via le serveur prend trop de temps."
+      file,
+      timeoutMs: 180_000,
+      timeoutMessage: "L'envoi de la video via le serveur prend trop de temps.",
+      onProgress: options.onProgress,
+    }
   );
 
   let payload: any = null;
   try {
-    payload = await response.json();
+    payload = JSON.parse(response.responseText || "null");
   } catch {
     payload = null;
   }
 
-  if (!response.ok || !payload?.publicUrl) {
+  if (response.status < 200 || response.status >= 300 || !payload?.publicUrl) {
     throw new Error(payload?.error || "Impossible d'envoyer la video via le serveur.");
   }
+
+  options.onProgress?.(100);
 
   return payload.publicUrl as string;
 }
 
-export async function uploadVideoFileDirect(file: File) {
+export async function uploadVideoFileDirect(file: File, options: VideoUploadOptions = {}) {
   const headers = await getBackendAuthHeaders();
   let response: Response;
 
@@ -948,11 +991,11 @@ export async function uploadVideoFileDirect(file: File) {
     );
   } catch (error) {
     if (error instanceof TypeError) {
-      return uploadVideoFileViaBackend(file);
+      return uploadVideoFileViaBackend(file, options);
     }
 
     if (error instanceof Error && error.message === "La preparation de l'upload video prend trop de temps.") {
-      return uploadVideoFileViaBackend(file);
+      return uploadVideoFileViaBackend(file, options);
     }
 
     throw error;
@@ -976,20 +1019,24 @@ export async function uploadVideoFileDirect(file: File) {
   let uploadResponse: Response;
 
   try {
-    uploadResponse = await withTimeout(
-      fetch(payload.uploadUrl, {
+    options.onProgress?.(0);
+    const xhr = await uploadFileWithProgress(
+      {
+        url: payload.uploadUrl,
         method: "PUT",
         headers: {
           "Content-Type": file.type || "video/mp4",
         },
-        body: file,
-      }),
-      120_000,
-      "L'envoi direct de la video prend trop de temps."
+        file,
+        timeoutMs: 120_000,
+        timeoutMessage: "L'envoi direct de la video prend trop de temps.",
+        onProgress: options.onProgress,
+      }
     );
+    uploadResponse = new Response(null, { status: xhr.status, statusText: xhr.statusText });
   } catch (error) {
     if (error instanceof TypeError) {
-      return uploadVideoFileViaBackend(file);
+      return uploadVideoFileViaBackend(file, options);
     }
 
     throw error;
@@ -998,6 +1045,8 @@ export async function uploadVideoFileDirect(file: File) {
   if (!uploadResponse.ok) {
     throw new Error("Echec d'envoi direct de la video.");
   }
+
+  options.onProgress?.(100);
 
   return payload.publicUrl as string;
 }
