@@ -882,7 +882,47 @@ async function getBackendAuthHeaders() {
   };
 }
 
-async function uploadVideoFileDirect(file: File) {
+async function uploadVideoFileViaBackend(file: File) {
+  const { data } = await withTimeout(
+    supabase.auth.getSession(),
+    5_000,
+    "La recuperation de la session utilisateur prend trop de temps."
+  );
+  const accessToken = data.session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("Session utilisateur introuvable pour l'upload video.");
+  }
+
+  const response = await withTimeout(
+    fetch(`${BACKEND_BASE_URL}/api/uploads/video-upload`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": file.type || "video/mp4",
+        "X-Upload-Filename": file.name,
+      },
+      body: file,
+    }),
+    180_000,
+    "L'envoi de la video via le serveur prend trop de temps."
+  );
+
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok || !payload?.publicUrl) {
+    throw new Error(payload?.error || "Impossible d'envoyer la video via le serveur.");
+  }
+
+  return payload.publicUrl as string;
+}
+
+export async function uploadVideoFileDirect(file: File) {
   const headers = await getBackendAuthHeaders();
   const response = await withTimeout(
     fetch(`${BACKEND_BASE_URL}/api/uploads/video-sign`, {
@@ -908,17 +948,31 @@ async function uploadVideoFileDirect(file: File) {
     throw new Error(payload?.error || "Impossible de preparer l'upload video.");
   }
 
-  const uploadResponse = await withTimeout(
-    fetch(payload.uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": file.type || "video/mp4",
-      },
-      body: file,
-    }),
-    120_000,
-    "L'envoi direct de la video prend trop de temps."
-  );
+  if (typeof payload.uploadUrl === "string" && /your-access-key-id|paste_/i.test(payload.uploadUrl)) {
+    throw new Error("Le serveur video utilise encore des identifiants R2 de test. Remplacez les variables R2 du backend par les vraies valeurs Cloudflare.");
+  }
+
+  let uploadResponse: Response;
+
+  try {
+    uploadResponse = await withTimeout(
+      fetch(payload.uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type || "video/mp4",
+        },
+        body: file,
+      }),
+      120_000,
+      "L'envoi direct de la video prend trop de temps."
+    );
+  } catch (error) {
+    if (error instanceof TypeError) {
+      return uploadVideoFileViaBackend(file);
+    }
+
+    throw error;
+  }
 
   if (!uploadResponse.ok) {
     throw new Error("Echec d'envoi direct de la video.");

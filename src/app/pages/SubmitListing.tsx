@@ -6,7 +6,7 @@ import { Header } from "../components/Header";
 import { LoginModal } from "../components/LoginModal";
 import { deriveLocationLabel, getCitiesForRegion, tunisiaRegionOptions } from "../data/locations";
 import { supabase } from "../../lib/supabase";
-import { createSubmission, updateSubmissionMedia, uploadAllMedia } from "../../lib/api";
+import { createSubmission, updateSubmissionMedia, uploadAllMedia, uploadVideoFileDirect } from "../../lib/api";
 import { createListingSubmission, getAuthProfile, isUserLoggedIn, updateListingSubmission } from "../utils/storage";
 
 const nearbyCommodityOptions = [
@@ -127,9 +127,11 @@ export function SubmitListing() {
   const [listingPrice, setListingPrice] = useState("");
   const [listingDescription, setListingDescription] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
-    const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
-    const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+  const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [photoError, setPhotoError] = useState("");
   const [videoError, setVideoError] = useState("");
   const [formError, setFormError] = useState("");
@@ -237,17 +239,24 @@ export function SubmitListing() {
     if (newPhotos.length <= 7) setPhotoError("");
   };
 
+  const clearSelectedVideo = () => {
+    setVideoFile(null);
+    setUploadedVideoUrl(null);
+    setIsUploadingVideo(false);
+    setVideoPreviewUrl((current) => {
+      if (current) {
+        URL.revokeObjectURL(current);
+      }
+      return null;
+    });
+  };
+
   const handleVideoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] ?? null;
+    event.target.value = "";
 
     if (!selected) {
-      setVideoFile(null);
-      setVideoPreviewUrl((current) => {
-        if (current) {
-          URL.revokeObjectURL(current);
-        }
-        return null;
-      });
+      clearSelectedVideo();
       setVideoError("");
       return;
     }
@@ -255,18 +264,13 @@ export function SubmitListing() {
     try {
       const duration = await getVideoDuration(selected);
       if (duration > 120) {
-        setVideoFile(null);
-        setVideoPreviewUrl((current) => {
-          if (current) {
-            URL.revokeObjectURL(current);
-          }
-          return null;
-        });
+        clearSelectedVideo();
         setVideoError("Maximum 2 minutes pour la video.");
         return;
       }
 
       setVideoError("");
+      setUploadedVideoUrl(null);
       setVideoFile(selected);
       const nextPreviewUrl = URL.createObjectURL(selected);
       setVideoPreviewUrl((current) => {
@@ -275,18 +279,27 @@ export function SubmitListing() {
         }
         return nextPreviewUrl;
       });
+
+      setIsUploadingVideo(true);
+
+      try {
+        const uploadedUrl = await uploadVideoFileDirect(selected);
+        setUploadedVideoUrl(uploadedUrl);
+      } catch (uploadError) {
+        console.error("Immediate video upload failed:", uploadError);
+        setUploadedVideoUrl(null);
+        setVideoError(
+          uploadError instanceof Error
+            ? uploadError.message
+            : "Impossible d'envoyer la video vers Cloudflare. Merci de reessayer."
+        );
+      } finally {
+        setIsUploadingVideo(false);
+      }
     } catch {
-      setVideoFile(null);
-      setVideoPreviewUrl((current) => {
-        if (current) {
-          URL.revokeObjectURL(current);
-        }
-        return null;
-      });
+      clearSelectedVideo();
       setVideoError("Impossible de lire la video. Merci de reessayer.");
     }
-
-    event.target.value = "";
   };
 
   const toggleNearbyCommodity = (commodity: string) => {
@@ -358,13 +371,7 @@ export function SubmitListing() {
     photoPreviews.forEach((url) => URL.revokeObjectURL(url));
     setPhotos([]);
     setPhotoPreviews([]);
-    setVideoFile(null);
-    setVideoPreviewUrl((current) => {
-      if (current) {
-        URL.revokeObjectURL(current);
-      }
-      return null;
-    });
+    clearSelectedVideo();
     setPhotoError("");
     setVideoError("");
     setFormError("");
@@ -392,6 +399,11 @@ export function SubmitListing() {
     }
 
     if (videoError) {
+      return;
+    }
+
+    if (isUploadingVideo) {
+      setFormError("La video est encore en cours d'envoi vers Cloudflare. Merci de patienter.");
       return;
     }
 
@@ -451,7 +463,7 @@ export function SubmitListing() {
         description: fallbackDescription,
         image: "",
         gallery: [],
-        video_url: null,
+        video_url: uploadedVideoUrl,
         features: combinedFeatures,
         tags: combinedEquipment,
         featured: false,
@@ -464,7 +476,8 @@ export function SubmitListing() {
 
       const submittedPhotos = [...photos];
       const submittedVideoFile = videoFile;
-      const hasPendingMedia = submittedPhotos.length > 0 || Boolean(submittedVideoFile);
+      const submittedVideoUrl = uploadedVideoUrl;
+      const hasPendingMedia = submittedPhotos.length > 0 || Boolean(submittedVideoFile && !submittedVideoUrl);
 
       const created = createListingSubmission({
         title: fallbackTitle,
@@ -481,8 +494,8 @@ export function SubmitListing() {
         email: resolvedEmail,
         phone: phone.trim() || "Non renseigne",
         photoCount: submittedPhotos.length,
-        hasVideo: Boolean(submittedVideoFile),
-        videoUrl: undefined,
+        hasVideo: Boolean(submittedVideoFile || submittedVideoUrl),
+        videoUrl: submittedVideoUrl ?? undefined,
         coverImage: remotePending.image,
         gallery: remotePending.gallery,
         bedrooms: parsedBedrooms,
@@ -509,13 +522,13 @@ export function SubmitListing() {
         void (async () => {
           try {
             const mediaResult = await withTimeout(
-              uploadAllMedia(submittedPhotos, submittedVideoFile),
+              uploadAllMedia(submittedPhotos, submittedVideoUrl ? null : submittedVideoFile),
               180000,
               "L'envoi des medias prend trop de temps. Merci de reessayer et de garder la page ouverte jusqu'a la fin."
             );
 
             const photoUrls = mediaResult.photoUrls;
-            const videoUrl = mediaResult.videoUrl;
+            const videoUrl = submittedVideoUrl ?? mediaResult.videoUrl;
 
             if (submittedVideoFile && !videoUrl) {
               throw new Error("La video n'a pas pu etre enregistree. Merci de reessayer.");
@@ -988,13 +1001,7 @@ export function SubmitListing() {
                             <button
                               type="button"
                               onClick={() => {
-                                setVideoFile(null);
-                                setVideoPreviewUrl((current) => {
-                                  if (current) {
-                                    URL.revokeObjectURL(current);
-                                  }
-                                  return null;
-                                });
+                                clearSelectedVideo();
                                 setVideoError("");
                               }}
                               className="text-slate-400 hover:text-rose-500"
@@ -1002,6 +1009,13 @@ export function SubmitListing() {
                               <X className="h-4 w-4" />
                             </button>
                           </div>
+                          <p className="text-xs font-medium text-slate-500">
+                            {isUploadingVideo
+                              ? "Envoi de la video vers Cloudflare en cours..."
+                              : uploadedVideoUrl
+                                ? "Video envoyee sur Cloudflare."
+                                : "La video sera envoyee des sa selection."}
+                          </p>
                         </div>
                       ) : (
                         <div className="rounded-xl border border-[#d9e6f2] bg-[#eef5fb] px-3 py-3 text-sm text-[#1f5f96]">
@@ -1024,7 +1038,7 @@ export function SubmitListing() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading || Boolean(submissionReceipt)}
+                  disabled={isLoading || isUploadingVideo || Boolean(submissionReceipt)}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#0369a1_0%,#2563eb_100%)] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:brightness-110 disabled:opacity-60 sm:w-auto"
                 >
                   {submissionReceipt ? "Envoyee ✓" : isLoading ? "Envoi en cours..." : "Envoyer pour validation"}
