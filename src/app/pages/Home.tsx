@@ -40,6 +40,7 @@ export function Home() {
     },
   };
   const propertyTypeGroups = transactionType === "Location" ? propertyTypesByTransaction.Location : propertyTypesByTransaction.Vente;
+  const propertyTypeOptions = Object.values(propertyTypeGroups).flat();
   const loadPublicProperties = useCallback(async () => {
     try {
       const res = await getPublicPropertiesAsync();
@@ -259,27 +260,20 @@ export function Home() {
                     >
                       Tous les types
                     </button>
-                    {Object.entries(propertyTypeGroups).map(([groupLabel, items]) => (
-                      <div key={groupLabel} className="mb-1 last:mb-0">
-                        <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
-                          {groupLabel}
-                        </p>
-                        {items.map((propertyType) => (
-                          <button
-                            key={propertyType}
-                            type="button"
-                            onClick={() => {
-                              setSearchType(propertyType);
-                              setTypeOpen(false);
-                            }}
-                            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                              searchType === propertyType ? "bg-slate-950 text-white" : "text-slate-700 hover:bg-slate-100"
-                            }`}
-                          >
-                            {propertyType}
-                          </button>
-                        ))}
-                      </div>
+                    {propertyTypeOptions.map((propertyType) => (
+                      <button
+                        key={propertyType}
+                        type="button"
+                        onClick={() => {
+                          setSearchType(propertyType);
+                          setTypeOpen(false);
+                        }}
+                        className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                          searchType === propertyType ? "bg-slate-950 text-white" : "text-slate-700 hover:bg-slate-100"
+                        }`}
+                      >
+                        {propertyType}
+                      </button>
                     ))}
                   </div>
                 )}
