@@ -30,17 +30,12 @@ export function Home() {
   const cityOptions = getCitiesForRegion(searchRegion);
 
   const propertyTypesByTransaction = {
-    Vente: {
-      Habitation: ["Appartement", "Villa", "Terrain"],
-      Commercial: ["Local commercial", "Bureau", "Immeuble", "Terrain agricole", "Usine"],
-    },
-    Location: {
-      Habitation: ["Appartement", "Villa"],
-      Commercial: ["Surface", "Bureau", "Usine"],
-    },
+    Vente: ["Appartement", "Villa", "Terrain", "Local commercial", "Bureau", "Immeuble", "Terrain agricole", "Usine"],
+    Location: ["Appartement", "Villa", "Surface", "Bureau", "Usine"],
   };
-  const propertyTypeGroups = transactionType === "Location" ? propertyTypesByTransaction.Location : propertyTypesByTransaction.Vente;
-  const propertyTypeOptions = Object.values(propertyTypeGroups).flat();
+  const propertyTypeOptions = transactionType === "Location"
+    ? propertyTypesByTransaction.Location
+    : propertyTypesByTransaction.Vente;
   const loadPublicProperties = useCallback(async () => {
     try {
       const res = await getPublicPropertiesAsync();
