@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Building2, Facebook, RefreshCw, X } from "lucide-react";
+import { Building2, Mail, RefreshCw, X } from "lucide-react";
 import { getAuthProfile, isUserLoggedIn, setAuthSession, type AuthProfile } from "../utils/storage";
 import { supabase } from "../../lib/supabase";
 
 const DEFAULT_PRODUCTION_APP_URL = "https://j-immobilier.vercel.app";
-
+const OTP_LENGTH = 6;
 function resolveAuthRedirectBase() {
   const configuredAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL ?? "").trim();
   if (configuredAppUrl) {
@@ -41,7 +41,25 @@ function deriveNameFromEmail(value: string) {
     .join(" ") || "Utilisateur";
 }
 
-function getProvider(user: any): "email" | "google" | "facebook" {
+function getEmailOtpErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+
+  if (/535 Authentication credentials invalid/i.test(message)) {
+    return "La configuration SMTP de Supabase est invalide. Verifiez l'hote, le nom d'utilisateur et le mot de passe dans Authentication > SMTP Settings.";
+  }
+
+  if (/Error sending magic link email/i.test(message)) {
+    return "Supabase n'a pas pu envoyer l'email OTP. Verifiez votre configuration SMTP dans Authentication > SMTP Settings.";
+  }
+
+  if (/Email address not authorized/i.test(message)) {
+    return "Cette adresse email n'est pas autorisee par le fournisseur email actuel. Configurez un vrai SMTP pour envoyer des OTP a tous les utilisateurs.";
+  }
+
+  return message || "Impossible d'envoyer le code OTP par email pour le moment.";
+}
+
+function getProvider(user: any): "email" | "google" | "facebook" | "phone" {
   const provider = user?.app_metadata?.provider;
   const providers = user?.app_metadata?.providers;
 
@@ -53,14 +71,19 @@ function getProvider(user: any): "email" | "google" | "facebook" {
     return "facebook";
   }
 
+  if (provider === "phone" || (Array.isArray(providers) && providers.includes("phone")) || user?.phone) {
+    return "phone";
+  }
+
   return "email";
 }
 
-function getDisplayName(user: any, fallbackEmail: string) {
+function getDisplayName(user: any, fallbackIdentifier: string) {
   return user?.user_metadata?.full_name
     || user?.user_metadata?.name
+    || user?.phone
     || user?.email
-    || fallbackEmail
+    || fallbackIdentifier
     || "Utilisateur";
 }
 
@@ -74,8 +97,12 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [providerAvailability, setProviderAvailability] = useState({
     google: true,
-    facebook: true,
   });
+  const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const otpDigits = useMemo(
+    () => Array.from({ length: OTP_LENGTH }, (_, index) => otpCode[index] ?? ""),
+    [otpCode],
+  );
 
   const resetForm = () => {
     setEmail("");
@@ -120,7 +147,6 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
         setProviderAvailability({
           google: Boolean(settings?.external?.google),
-          facebook: Boolean(settings?.external?.facebook),
         });
       } catch {
         // Keep the buttons enabled if the settings endpoint is unavailable.
@@ -144,6 +170,16 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
   }, [isOpen]);
 
   useEffect(() => {
+    if (otpStep !== "otp") {
+      return;
+    }
+
+    const firstEmptyIndex = otpDigits.findIndex((digit) => digit === "");
+    const targetIndex = firstEmptyIndex === -1 ? OTP_LENGTH - 1 : firstEmptyIndex;
+    otpInputRefs.current[targetIndex]?.focus();
+  }, [otpDigits, otpStep]);
+
+  useEffect(() => {
     if (!isOpen || typeof document === "undefined") {
       return;
     }
@@ -155,8 +191,8 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
     };
   }, [isOpen]);
 
-  const handleSocialLogin = async (provider: "google" | "facebook") => {
-    const providerLabel = provider === "facebook" ? "Facebook" : "Google";
+  const handleSocialLogin = async (provider: "google") => {
+    const providerLabel = "Google";
 
     if (!providerAvailability[provider]) {
       setAuthError(`La connexion ${providerLabel} n'est pas encore active pour cette application.`);
@@ -171,8 +207,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
         provider,
         options: {
           redirectTo: `${resolveAuthRedirectBase()}/auth-handler`,
-          queryParams: provider === "google" ? { prompt: "select_account" } : undefined,
-          scopes: provider === "facebook" ? "email public_profile" : undefined,
+          queryParams: { prompt: "select_account" },
         },
       });
 
@@ -211,6 +246,63 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setOtpHint(`Un code de verification a ete envoye a ${trimmedEmail}.`);
   };
 
+  const updateOtpCodeAt = (index: number, replacement: string) => {
+    const nextDigits = [...otpDigits];
+
+    replacement.slice(0, OTP_LENGTH - index).split("").forEach((digit, offset) => {
+      nextDigits[index + offset] = digit;
+    });
+
+    const nextCode = nextDigits.join("").slice(0, OTP_LENGTH);
+    setOtpCode(nextCode);
+
+    const nextFocusIndex = Math.min(index + Math.max(replacement.length, 1), OTP_LENGTH - 1);
+    otpInputRefs.current[nextFocusIndex]?.focus();
+  };
+
+  const handleOtpInputChange = (index: number, value: string) => {
+    const digits = value.replace(/\D/g, "");
+
+    if (!digits) {
+      const nextDigits = [...otpDigits];
+      nextDigits[index] = "";
+      setOtpCode(nextDigits.join("").slice(0, OTP_LENGTH));
+      return;
+    }
+
+    updateOtpCodeAt(index, digits);
+  };
+
+  const handleOtpKeyDown = (index: number, event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Backspace" && !otpDigits[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+      return;
+    }
+
+    if (event.key === "ArrowLeft" && index > 0) {
+      event.preventDefault();
+      otpInputRefs.current[index - 1]?.focus();
+      return;
+    }
+
+    if (event.key === "ArrowRight" && index < OTP_LENGTH - 1) {
+      event.preventDefault();
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+    event.preventDefault();
+    const pastedDigits = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, OTP_LENGTH);
+
+    if (!pastedDigits) {
+      return;
+    }
+
+    setOtpCode(pastedDigits);
+    otpInputRefs.current[Math.min(pastedDigits.length, OTP_LENGTH) - 1]?.focus();
+  };
+
   const startOtpFlow = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -225,8 +317,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
     try {
       await requestEmailOtp();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      setAuthError(message || "Impossible d'envoyer le code OTP pour le moment.");
+      setAuthError(getEmailOtpErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -235,8 +326,8 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const verifyOtpAndLogin = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!/^\d{6}$/.test(otpCode.trim())) {
-      setAuthError("Entrez un code OTP valide de 6 chiffres.");
+    if (!new RegExp(`^\\d{${OTP_LENGTH}}$`).test(otpCode.trim())) {
+      setAuthError(`Entrez un code OTP valide de ${OTP_LENGTH} chiffres.`);
       return;
     }
 
@@ -256,8 +347,9 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
       const user = data.user ?? data.session?.user;
       setAuthSession({
-        name: getDisplayName(user, email.trim()) || authProfile?.name || deriveNameFromEmail(email),
+        name: getDisplayName(user, email.trim()) || authProfile?.name || deriveNameFromEmail(email.trim()),
         email: user?.email ?? email.trim(),
+        phone: user?.phone ?? undefined,
         provider: getProvider(user),
       });
       onClose();
@@ -291,7 +383,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
           </div>
           <h2 className="mt-4 text-center text-3xl font-bold text-slate-950">Connexion ou inscription</h2>
           <p className="mt-2 text-center text-slate-600">
-            Utilisez votre email avec un code OTP, ou connectez-vous via Google ou Facebook.
+            Utilisez votre adresse email avec un code OTP, ou connectez-vous via Google.
           </p>
         </div>
 
@@ -301,14 +393,18 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
               <form onSubmit={startOtpFlow} className="space-y-4">
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-slate-700">Adresse email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full rounded-[16px] border border-slate-300 bg-slate-50 px-4 py-3 text-slate-950 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
-                    placeholder="exemple@email.com"
-                  />
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className="w-full rounded-[16px] border border-slate-300 bg-slate-50 py-3 pl-11 pr-4 text-slate-950 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                      placeholder="exemple@email.com"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">Le compte est cree automatiquement lors de la premiere verification du code.</p>
                 </div>
 
                 {authError && <p className="text-sm font-semibold text-rose-600">{authError}</p>}
@@ -318,7 +414,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   disabled={isLoading}
                   className="w-full rounded-[16px] bg-slate-950 px-4 py-3 font-semibold text-white shadow-[0_10px_20px_rgba(2,6,23,0.24)] transition-all duration-200 hover:bg-[linear-gradient(135deg,#020617_0%,#0f172a_58%,#0369a1_100%)] disabled:opacity-70"
                 >
-                  {isLoading ? "Envoi..." : "Continuer"}
+                  {isLoading ? "Envoi..." : "Continuer par email"}
                 </button>
 
                 <div className="flex items-center gap-3 pt-1">
@@ -327,52 +423,45 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   <div className="h-px flex-1 bg-slate-200" />
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div>
                   <button
                     type="button"
                     onClick={() => handleSocialLogin("google")}
                     disabled={!providerAvailability.google}
-                    className="inline-flex items-center justify-center gap-2 rounded-[16px] border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 transition hover:border-sky-200 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-[16px] border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 transition hover:border-sky-200 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-sm font-bold text-[#ea4335] shadow-sm">
                       G
                     </span>
                     Google
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSocialLogin("facebook")}
-                    disabled={!providerAvailability.facebook}
-                    className="inline-flex items-center justify-center gap-2 rounded-[16px] border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 transition hover:border-sky-200 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#1877f2] text-sm font-bold text-white shadow-sm">
-                      <Facebook className="h-3.5 w-3.5 fill-current" />
-                    </span>
-                    {providerAvailability.facebook ? "Facebook" : "Facebook indisponible"}
-                  </button>
                 </div>
-
-                {!providerAvailability.facebook && (
-                  <p className="text-xs font-medium text-amber-600">
-                    Facebook n&apos;est pas encore configuré dans Supabase pour ce projet.
-                  </p>
-                )}
               </form>
             ) : (
               <form onSubmit={verifyOtpAndLogin} className="space-y-4">
                 <p className="text-sm text-slate-600">{otpHint}</p>
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-slate-700">Code OTP</label>
-                  <input
-                    inputMode="numeric"
-                    pattern="[0-9]{6}"
-                    maxLength={6}
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    required
-                    className="w-full rounded-[16px] border border-slate-300 bg-slate-50 px-4 py-3 text-center text-lg font-semibold tracking-[0.35em] text-slate-950 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
-                    placeholder="000000"
-                  />
+                  <div className="grid grid-cols-6 gap-2 sm:gap-3">
+                    {otpDigits.map((digit, index) => (
+                      <input
+                        key={`otp-digit-${index}`}
+                        ref={(element) => {
+                          otpInputRefs.current[index] = element;
+                        }}
+                        inputMode="numeric"
+                        autoComplete={index === 0 ? "one-time-code" : "off"}
+                        pattern="[0-9]*"
+                        maxLength={OTP_LENGTH}
+                        value={digit}
+                        onChange={(event) => handleOtpInputChange(index, event.target.value)}
+                        onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                        onPaste={handleOtpPaste}
+                        className="h-14 w-full rounded-[16px] border border-slate-300 bg-slate-50 text-center text-xl font-semibold text-slate-950 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                        aria-label={`Chiffre ${index + 1} du code OTP`}
+                      />
+                    ))}
+                  </div>
                   <p className="mt-2 text-xs text-slate-500">Saisissez le code recu par email pour finaliser la connexion.</p>
                 </div>
 
@@ -400,19 +489,19 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   </button>
                   <button
                     type="button"
+                    disabled={isLoading}
                     onClick={async () => {
                       setAuthError("");
                       setIsLoading(true);
                       try {
                         await requestEmailOtp();
                       } catch (error) {
-                        const message = error instanceof Error ? error.message : "";
-                        setAuthError(message || "Impossible de renvoyer le code OTP.");
+                        setAuthError(getEmailOtpErrorMessage(error));
                       } finally {
                         setIsLoading(false);
                       }
                     }}
-                    className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
+                    className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-400"
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
                     Renvoyer le code

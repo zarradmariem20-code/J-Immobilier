@@ -83,7 +83,14 @@ export function Header() {
       }
     };
     fetchUser();
-    const { data: listener } = supabase.auth.onAuthStateChange(fetchUser);
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user ?? null;
+      setAuthProfile(user);
+      if (user && pendingRedirect) {
+        setPendingRedirect(null);
+        setLoginModalOpen(false);
+      }
+    });
     return () => {
       listener.subscription.unsubscribe();
     };
@@ -102,7 +109,7 @@ export function Header() {
     { path: "/listings", label: "Annonces", icon: Building2 },
     { path: "/contact", label: "Contactez nous", icon: MessageCircle },
   ];
-  const userName = authProfile?.user_metadata?.full_name || authProfile?.email || "Utilisateur";
+  const userName = authProfile?.user_metadata?.full_name || authProfile?.phone || authProfile?.email || "Utilisateur";
   const userInitials = userName
     ?.split(" ")
     .filter(Boolean)

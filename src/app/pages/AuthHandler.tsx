@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { supabase } from "../../lib/supabase";
 import { clearAuthSession, setAuthSession } from "../utils/storage";
 
-function getProvider(user: any): "email" | "google" | "facebook" {
+function getProvider(user: any): "email" | "google" | "facebook" | "phone" {
   const provider = user?.app_metadata?.provider;
   const providers = user?.app_metadata?.providers;
 
@@ -15,12 +15,17 @@ function getProvider(user: any): "email" | "google" | "facebook" {
     return "facebook";
   }
 
+  if (provider === "phone" || (Array.isArray(providers) && providers.includes("phone")) || user?.phone) {
+    return "phone";
+  }
+
   return "email";
 }
 
 function getDisplayName(user: any) {
   return user?.user_metadata?.full_name
     || user?.user_metadata?.name
+    || user?.phone
     || user?.email?.split("@")[0]
     || "Utilisateur";
 }
@@ -72,6 +77,7 @@ export default function AuthHandler() {
         setAuthSession({
           name: getDisplayName(user),
           email: user.email,
+          phone: user.phone ?? undefined,
           provider: getProvider(user),
         });
         navigate(redirectPath);

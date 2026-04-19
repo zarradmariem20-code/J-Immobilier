@@ -234,9 +234,8 @@ export function PropertyDetail() {
       applyAuthUser(user);
     };
     fetchUser();
-    const { data: listener } = supabase.auth.onAuthStateChange(async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      applyAuthUser(user);
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      applyAuthUser(session?.user ?? null);
     });
     return () => {
       listener.subscription.unsubscribe();
@@ -254,7 +253,14 @@ export function PropertyDetail() {
       }
     };
     fetchUser();
-    const { data: listener } = supabase.auth.onAuthStateChange(fetchUser);
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user ?? null;
+      if (user) {
+        applyAuthUser(user);
+        setLoginModalOpen(false);
+        setIsContactModalOpen(true);
+      }
+    });
     return () => {
       listener.subscription.unsubscribe();
     };

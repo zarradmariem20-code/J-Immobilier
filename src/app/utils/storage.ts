@@ -12,7 +12,8 @@ export interface SavedInquiry {
 export interface AuthProfile {
   name: string;
   email?: string;
-  provider: "email" | "google" | "facebook";
+  phone?: string;
+  provider: "email" | "google" | "facebook" | "phone";
 }
 
 export interface AdminSession {
