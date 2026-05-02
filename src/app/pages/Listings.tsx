@@ -263,18 +263,11 @@ export function Listings() {
   }, [bathroomFilter, bedroomFilter, showRoomFilters]);
 
   useEffect(() => {
-    const handleFocusRefresh = () => {
-      loadAllProperties(false);
-    };
-
     const unsubscribe = subscribeToPropertiesRealtime(() => {
       loadAllProperties(false);
     });
-
-    window.addEventListener("focus", handleFocusRefresh);
     return () => {
       unsubscribe();
-      window.removeEventListener("focus", handleFocusRefresh);
     };
   }, [loadAllProperties]);
 

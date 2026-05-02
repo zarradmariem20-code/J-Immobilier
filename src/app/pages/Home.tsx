@@ -65,18 +65,11 @@ export function Home() {
   }, [loadPublicProperties]);
 
   useEffect(() => {
-    const handleFocusRefresh = () => {
-      loadPublicProperties();
-    };
-
     const unsubscribe = subscribeToPropertiesRealtime(() => {
       loadPublicProperties();
     });
-
-    window.addEventListener("focus", handleFocusRefresh);
     return () => {
       unsubscribe();
-      window.removeEventListener("focus", handleFocusRefresh);
     };
   }, [loadPublicProperties]);
 

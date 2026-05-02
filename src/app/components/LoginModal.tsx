@@ -186,8 +186,36 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
+    const restoreOverflow = () => {
       document.body.style.overflow = previousOverflow;
+    };
+
+    // Ensure we never keep the page locked after leaving/returning from OAuth flows.
+    window.addEventListener("pagehide", restoreOverflow);
+    return () => {
+      window.removeEventListener("pagehide", restoreOverflow);
+      restoreOverflow();
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const unlockIfModalClosed = () => {
+      if (!isOpen && document.body.style.overflow === "hidden") {
+        document.body.style.overflow = "";
+      }
+    };
+
+    window.addEventListener("pageshow", unlockIfModalClosed);
+    window.addEventListener("focus", unlockIfModalClosed);
+    unlockIfModalClosed();
+
+    return () => {
+      window.removeEventListener("pageshow", unlockIfModalClosed);
+      window.removeEventListener("focus", unlockIfModalClosed);
     };
   }, [isOpen]);
 

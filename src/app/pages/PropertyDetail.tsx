@@ -13,7 +13,7 @@ import { LoginModal } from "../components/LoginModal.tsx";
 import facebookLogo from "../../assets/Facebook_Logo.png";
 import instagramLogo from "../../assets/insta.avif";
 import tiktokLogo from "../../assets/tiktok-.webp";
-import { createReport, createVisit, getProperty, subscribeToPropertiesRealtime, toggleFavorite } from "../../lib/api";
+import { createReport, createVisit, getProperty, getPublicSiteSettings, subscribeToPropertiesRealtime, toggleFavorite, type SiteSettings } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
 import { getCachedPublicProperties, getPublicPropertiesAsync } from "../utils/publicListings";
 import { companyName, companyPhoneDisplay, companyPrimaryPhoneRaw, companyWhatsAppPhoneRaw } from "../utils/company";
@@ -22,24 +22,21 @@ type MediaItem =
   | { kind: "image"; src: string }
   | { kind: "video"; src: string };
 
-const companySocialLinks = [
+const defaultCompanySocialLinks = [
   {
     label: "Facebook",
     href: "https://www.facebook.com/profile.php?id=100054570723975&sk=followers",
     logoSrc: facebookLogo,
-    buttonClass: "border-slate-200 bg-[#f3f7ff] hover:bg-[#e9f1ff]",
   },
   {
     label: "Instagram",
     href: "https://www.instagram.com/journal_immobilier?igsh=Mzl3eDE2eHZneGlv",
     logoSrc: instagramLogo,
-    buttonClass: "border-slate-200 bg-[#fff4fb] hover:bg-[#ffe9f6]",
   },
   {
     label: "TikTok",
     href: "https://www.tiktok.com/@journal_immo2?is_from_webapp=1&sender_device=pc",
     logoSrc: tiktokLogo,
-    buttonClass: "border-slate-200 bg-[#f5f7fa] hover:bg-slate-100",
   },
 ];
 
@@ -99,6 +96,7 @@ export function PropertyDetail() {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
   const [userProfile, setUserProfile] = useState({
     fullName: "",
     email: "",
@@ -118,6 +116,33 @@ export function PropertyDetail() {
   const touchStartXRef = useRef<number | null>(null);
   const activeMedia = mediaItems[activeMediaIndex] ?? { kind: "image", src: "" };
   const isPlayableActiveVideo = activeMedia.kind === "video" && Boolean(activeMedia.src) && !isActiveVideoBroken;
+  const companySocialLinks = useMemo(() => {
+    if (!siteSettings?.socialLinks) {
+      return defaultCompanySocialLinks;
+    }
+
+    return [
+      { label: "Facebook", href: siteSettings.socialLinks.facebook || defaultCompanySocialLinks[0].href, logoSrc: facebookLogo },
+      { label: "Instagram", href: siteSettings.socialLinks.instagram || defaultCompanySocialLinks[1].href, logoSrc: instagramLogo },
+      { label: "TikTok", href: siteSettings.socialLinks.tiktok || defaultCompanySocialLinks[2].href, logoSrc: tiktokLogo },
+    ];
+  }, [siteSettings]);
+  const contactPrimaryPhoneRaw = useMemo(() => {
+    const candidate = siteSettings?.contact?.primaryPhone?.trim() || companyPrimaryPhoneRaw;
+    return candidate;
+  }, [siteSettings]);
+  const contactWhatsAppPhoneRaw = useMemo(() => {
+    const candidate = siteSettings?.contact?.primaryPhone?.trim() || companyWhatsAppPhoneRaw;
+    return candidate.replace(/\D/g, "");
+  }, [siteSettings]);
+  const contactPhoneDisplay = useMemo(() => {
+    const primary = siteSettings?.contact?.primaryPhone?.trim() || "";
+    const secondary = siteSettings?.contact?.secondaryPhone?.trim() || "";
+    if (primary && secondary) {
+      return `${primary} / ${secondary}`;
+    }
+    return primary || secondary || companyPhoneDisplay;
+  }, [siteSettings]);
 
   const applyAuthUser = (user: any | null) => {
     if (!user) {
@@ -142,20 +167,12 @@ export function PropertyDetail() {
   };
 
   const handleContactClick = (type: "whatsapp" | "call") => {
-    if (!isLoggedIn) {
-      setLoginModalOpen(true);
+    if (type === "whatsapp") {
+      window.open(`https://wa.me/${contactWhatsAppPhoneRaw}`, "_blank", "noopener,noreferrer");
       return;
     }
-    if (isMobile) {
-      const phone = companyPrimaryPhoneRaw;
-      if (type === "whatsapp") {
-        window.open(`https://wa.me/${companyWhatsAppPhoneRaw.replace(/\D/g, "")}`, "_blank");
-      } else if (type === "call") {
-        window.location.href = `tel:${phone}`;
-      }
-      return;
-    }
-    setIsContactModalOpen(true);
+
+    window.location.href = `tel:${contactPrimaryPhoneRaw}`;
   };
 
   useEffect(() => {
@@ -164,6 +181,24 @@ export function PropertyDetail() {
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    getPublicSiteSettings()
+      .then((data) => {
+        if (mounted) {
+          setSiteSettings(data);
+        }
+      })
+      .catch(() => {
+        // Keep fallback links when settings are unavailable.
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const mapProperty = useCallback((item: any): Property => ({
@@ -237,18 +272,11 @@ export function PropertyDetail() {
   }, [loadPropertyData]);
 
   useEffect(() => {
-    const handleFocusRefresh = () => {
-      loadPropertyData(false);
-    };
-
     const unsubscribe = subscribeToPropertiesRealtime(() => {
       loadPropertyData(false);
     });
-
-    window.addEventListener("focus", handleFocusRefresh);
     return () => {
       unsubscribe();
-      window.removeEventListener("focus", handleFocusRefresh);
     };
   }, [loadPropertyData]);
 
@@ -265,30 +293,6 @@ export function PropertyDetail() {
       listener.subscription.unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    if (!loginModalOpen) return;
-    const fetchUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        applyAuthUser(user);
-        setLoginModalOpen(false);
-        setIsContactModalOpen(true);
-      }
-    };
-    fetchUser();
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      const user = session?.user ?? null;
-      if (user) {
-        applyAuthUser(user);
-        setLoginModalOpen(false);
-        setIsContactModalOpen(true);
-      }
-    });
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, [loginModalOpen]);
 
   useEffect(() => {
     setActiveMediaIndex((currentIndex) => {
@@ -1090,13 +1094,13 @@ export function PropertyDetail() {
 
               <div className="rounded-[16px] border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-2">Téléphone</p>
-                <p className="text-lg font-bold text-slate-950 font-mono">{companyPhoneDisplay}</p>
+                <p className="text-lg font-bold text-slate-950 font-mono">{contactPhoneDisplay}</p>
                 <p className="mt-1 text-xs text-slate-500">Réponse rapide garantie</p>
               </div>
 
               <div className="flex gap-2 pt-2">
                 <a
-                  href={`https://wa.me/${companyWhatsAppPhoneRaw.replace(/\D/g, "")}`}
+                  href={`https://wa.me/${contactWhatsAppPhoneRaw}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 rounded-[12px] bg-emerald-50 px-4 py-2 text-center font-semibold text-emerald-700 transition hover:bg-emerald-100"
@@ -1104,7 +1108,7 @@ export function PropertyDetail() {
                   WhatsApp
                 </a>
                 <a
-                  href={`tel:${companyPrimaryPhoneRaw}`}
+                  href={`tel:${contactPrimaryPhoneRaw}`}
                   className="flex-1 rounded-[12px] bg-sky-50 px-4 py-2 text-center font-semibold text-sky-700 transition hover:bg-sky-100"
                 >
                   Appeler

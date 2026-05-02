@@ -25,6 +25,7 @@ export function Header() {
   const [authProfile, setAuthProfile] = useState<any>(() => _cachedUser);
   const [authReady, setAuthReady] = useState(() => _authInitialized);
   const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
+  const pendingRedirectRef = useRef<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const [announcementItems, setAnnouncementItems] = useState<string[]>([
@@ -38,6 +39,26 @@ export function Header() {
       if (s.announcementItems?.length) setAnnouncementItems(s.announcementItems);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const unlockBodyScroll = () => {
+      if (typeof document !== "undefined" && document.body.style.overflow === "hidden") {
+        document.body.style.overflow = "";
+      }
+    };
+
+    window.addEventListener("focus", unlockBodyScroll);
+    window.addEventListener("pageshow", unlockBodyScroll);
+
+    return () => {
+      window.removeEventListener("focus", unlockBodyScroll);
+      window.removeEventListener("pageshow", unlockBodyScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    pendingRedirectRef.current = pendingRedirect;
+  }, [pendingRedirect]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -101,7 +122,7 @@ export function Header() {
         _authInitialized = true;
         setAuthProfile(user);
         // If just logged in via modal and a redirect is pending, just close modal and clear redirect (no navigation)
-        if (user && pendingRedirect) {
+        if (user && pendingRedirectRef.current) {
           setPendingRedirect(null);
           setLoginModalOpen(false);
         }
@@ -118,7 +139,7 @@ export function Header() {
       _authInitialized = true;
       setAuthProfile(user);
       setAuthReady(true);
-      if (user && pendingRedirect) {
+      if (user && pendingRedirectRef.current) {
         setPendingRedirect(null);
         setLoginModalOpen(false);
       }
@@ -127,7 +148,7 @@ export function Header() {
     return () => {
       listener.subscription.unsubscribe();
     };
-  }, [pendingRedirect]);
+  }, []);
 
   // Removed effect that auto-navigates after login. Now, after login, user stays on the same screen.
 
