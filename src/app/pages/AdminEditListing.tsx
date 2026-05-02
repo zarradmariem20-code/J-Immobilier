@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, LocateFixed, Save } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
-import { approveListingWithBackend, clearListingsCache, getProperties } from "../../lib/api";
+import { approveListingWithBackend, clearListingsCache, getProperties, uploadAllMedia } from "../../lib/api";
 import { deriveLocationLabel, getCitiesForRegion, inferRegionCity, tunisiaRegionOptions } from "../data/locations";
 import {
   getAdminSession,
@@ -152,17 +152,18 @@ export function AdminEditListing() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isLocating, setIsLocating] = useState(false);
+  const [existingGalleryUrls, setExistingGalleryUrls] = useState<string[]>([]);
+  const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
+  const [newPhotoPreviews, setNewPhotoPreviews] = useState<string[]>([]);
+  const [existingVideoUrl, setExistingVideoUrl] = useState("");
+  const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
+  const [newVideoPreviewUrl, setNewVideoPreviewUrl] = useState("");
   const cityOptions = getCitiesForRegion(formState.region);
-  const galleryPreviewUrls = useMemo(() => {
-    const previewUrls = splitList(formState.gallery);
-
-    if (formState.coverImage.trim().length > 0 && !previewUrls.includes(formState.coverImage.trim())) {
-      previewUrls.unshift(formState.coverImage.trim());
-    }
-
-    return previewUrls;
-  }, [formState.coverImage, formState.gallery]);
-  const videoPreviewUrl = listing?.videoUrl?.trim() || "";
+  const galleryPreviewUrls = useMemo(
+    () => [...existingGalleryUrls, ...newPhotoPreviews],
+    [existingGalleryUrls, newPhotoPreviews],
+  );
+  const videoPreviewUrl = newVideoPreviewUrl || existingVideoUrl;
 
   useEffect(() => {
     if (!adminSession) {
@@ -179,6 +180,11 @@ export function AdminEditListing() {
       if (localItem) {
         setListing(localItem);
         setFormState(toFormState(localItem));
+        const initialGallery = Array.isArray(localItem.gallery) && localItem.gallery.length > 0
+          ? localItem.gallery.filter(Boolean)
+          : (localItem.coverImage ? [localItem.coverImage] : []);
+        setExistingGalleryUrls(initialGallery);
+        setExistingVideoUrl(localItem.videoUrl ?? "");
         setLoading(false);
         return;
       }
@@ -193,6 +199,11 @@ export function AdminEditListing() {
             const mapped = mapDbRowToListing(row);
             setListing(mapped);
             setFormState(toFormState(mapped));
+            const initialGallery = Array.isArray(mapped.gallery) && mapped.gallery.length > 0
+              ? mapped.gallery.filter(Boolean)
+              : (mapped.coverImage ? [mapped.coverImage] : []);
+            setExistingGalleryUrls(initialGallery);
+            setExistingVideoUrl(mapped.videoUrl ?? "");
           } else {
             setError("Annonce introuvable.");
           }
@@ -216,6 +227,77 @@ export function AdminEditListing() {
   const updateField = <K extends keyof ListingFormState>(key: K, value: ListingFormState[K]) => {
     setFormState((current) => ({ ...current, [key]: value }));
   };
+
+  const handleAddPhotos = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const incomingFiles = Array.from(event.target.files ?? []);
+    if (incomingFiles.length === 0) {
+      return;
+    }
+
+    const allowedSlots = Math.max(0, 7 - existingGalleryUrls.length - newPhotoFiles.length);
+    const acceptedFiles = incomingFiles.slice(0, allowedSlots);
+
+    if (acceptedFiles.length < incomingFiles.length) {
+      setError("Maximum 7 photos au total.");
+    } else {
+      setError("");
+    }
+
+    const previewUrls = acceptedFiles.map((file) => URL.createObjectURL(file));
+    setNewPhotoFiles((previous) => [...previous, ...acceptedFiles]);
+    setNewPhotoPreviews((previous) => [...previous, ...previewUrls]);
+    event.target.value = "";
+  };
+
+  const removeExistingPhoto = (index: number) => {
+    setExistingGalleryUrls((previous) => previous.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  const removeNewPhoto = (index: number) => {
+    setNewPhotoFiles((previous) => previous.filter((_, currentIndex) => currentIndex !== index));
+    setNewPhotoPreviews((previous) => {
+      const toRevoke = previous[index];
+      if (toRevoke) {
+        URL.revokeObjectURL(toRevoke);
+      }
+      return previous.filter((_, currentIndex) => currentIndex !== index);
+    });
+  };
+
+  const handleVideoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0] ?? null;
+    event.target.value = "";
+
+    if (!selectedFile) {
+      return;
+    }
+
+    if (newVideoPreviewUrl) {
+      URL.revokeObjectURL(newVideoPreviewUrl);
+    }
+
+    setNewVideoFile(selectedFile);
+    setNewVideoPreviewUrl(URL.createObjectURL(selectedFile));
+    setError("");
+  };
+
+  const removeVideo = () => {
+    if (newVideoPreviewUrl) {
+      URL.revokeObjectURL(newVideoPreviewUrl);
+    }
+    setNewVideoFile(null);
+    setNewVideoPreviewUrl("");
+    setExistingVideoUrl("");
+  };
+
+  useEffect(() => {
+    return () => {
+      newPhotoPreviews.forEach((url) => URL.revokeObjectURL(url));
+      if (newVideoPreviewUrl) {
+        URL.revokeObjectURL(newVideoPreviewUrl);
+      }
+    };
+  }, [newPhotoPreviews, newVideoPreviewUrl]);
 
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -243,8 +325,8 @@ export function AdminEditListing() {
     event.preventDefault();
     if (!listing) return;
 
-    const gallery = splitList(formState.gallery);
-    const coverImage = gallery[0] || listing.coverImage || "";
+    let gallery = [...existingGalleryUrls];
+    let finalVideoUrl = existingVideoUrl || listing.videoUrl || "";
     const features = splitList(formState.features);
     const tags = splitList(formState.tags);
     const nearbyCommodities = splitList(formState.nearbyCommodities);
@@ -265,7 +347,18 @@ export function AdminEditListing() {
     setSuccess("");
 
     try {
-      const backendId = await approveListingWithBackend({
+      if (newPhotoFiles.length > 0 || newVideoFile) {
+        const mediaUpload = await uploadAllMedia(newPhotoFiles, newVideoFile);
+        if (mediaUpload.photoUrls.length > 0) {
+          gallery = [...gallery, ...mediaUpload.photoUrls];
+        }
+        if (mediaUpload.videoUrl) {
+          finalVideoUrl = mediaUpload.videoUrl;
+        }
+      }
+
+      const coverImage = gallery[0] || "";
+      const approvalResult = await approveListingWithBackend({
         id: listing.id,
         title: formState.title.trim(),
         price: parsedPrice,
@@ -282,7 +375,7 @@ export function AdminEditListing() {
         description: formState.description.trim() || undefined,
         coverImage: coverImage || undefined,
         gallery,
-        videoUrl: listing.videoUrl || undefined,
+        videoUrl: finalVideoUrl || undefined,
         features,
         tags,
         featured: formState.featured,
@@ -309,11 +402,13 @@ export function AdminEditListing() {
           phone: formState.phone.trim(),
           coverImage: coverImage || undefined,
           gallery,
+          hasVideo: Boolean(finalVideoUrl),
+          videoUrl: finalVideoUrl || undefined,
           photoCount: gallery.length,
           features,
           tags,
           featured: formState.featured,
-          supabaseId: backendId,
+          supabaseId: approvalResult.id,
         });
       }
 
@@ -468,29 +563,68 @@ export function AdminEditListing() {
                         </div>
                       )}
 
-                      {galleryPreviewUrls.length > 0 && (
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                          {galleryPreviewUrls.map((url, index) => (
-                            <div key={`${url}-${index}`} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                              <img
-                                src={url}
-                                alt={`Media ${index + 1}`}
-                                className="h-32 w-full object-cover"
-                                loading="lazy"
-                              />
-                              <div className="border-t border-slate-100 px-2 py-1.5 text-[11px] font-medium text-slate-500">
-                                {index === 0 ? "Image principale" : `Galerie ${index + 1}`}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-600">Galerie URLs (une par ligne)</label>
-                    <textarea value={formState.gallery} onChange={(e) => updateField("gallery", e.target.value)} rows={6} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-sky-400 focus:bg-white focus:outline-none" />
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-slate-600">Photos</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleAddPhotos}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-100 file:px-3 file:py-1.5 file:text-sky-800"
+                    />
+                    <p className="text-xs text-slate-500">Ajoutez des photos comme dans la création d'annonce (max 7 au total).</p>
                   </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-slate-600">Vidéo</label>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={handleVideoFileChange}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-100 file:px-3 file:py-1.5 file:text-sky-800"
+                    />
+                    {(existingVideoUrl || newVideoFile) && (
+                      <button
+                        type="button"
+                        onClick={removeVideo}
+                        className="rounded-lg px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                      >
+                        Supprimer la vidéo
+                      </button>
+                    )}
+                  </div>
+
+                  {galleryPreviewUrls.length > 0 && (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {galleryPreviewUrls.map((url, index) => {
+                        const isExisting = index < existingGalleryUrls.length;
+                        const newIndex = index - existingGalleryUrls.length;
+
+                        return (
+                          <div key={`${url}-${index}`} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                            <img
+                              src={url}
+                              alt={`Media ${index + 1}`}
+                              className="h-32 w-full object-cover"
+                              loading="lazy"
+                            />
+                            <div className="flex items-center justify-between border-t border-slate-100 px-2 py-1.5 text-[11px] font-medium text-slate-500">
+                              <span>{index === 0 ? "Image principale" : `Galerie ${index + 1}`}</span>
+                              <button
+                                type="button"
+                                onClick={() => (isExisting ? removeExistingPhoto(index) : removeNewPhoto(newIndex))}
+                                className="rounded px-2 py-0.5 font-semibold text-rose-600 hover:bg-rose-50"
+                              >
+                                Supprimer
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <textarea value={formState.nearbyCommodities} onChange={(e) => updateField("nearbyCommodities", e.target.value)} rows={3} placeholder="Commodites, separees par virgules" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-sky-400 focus:bg-white focus:outline-none" />
                   <input value={formState.features} onChange={(e) => updateField("features", e.target.value)} placeholder="Caracteristiques, separees par virgules" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-sky-400 focus:bg-white focus:outline-none" />
                   <input value={formState.tags} onChange={(e) => updateField("tags", e.target.value)} placeholder="Tags, separes par virgules" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-sky-400 focus:bg-white focus:outline-none" />

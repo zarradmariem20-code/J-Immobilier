@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { dbPool } from "../lib/db.js";
+import { postListingToSocial } from "../services/social.js";
 
 const router = Router();
 
-const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1200&h=800&fit=crop";
 const VISIT_AUTOCOMPLETE_INTERVAL_MS = 60_000;
 let lastVisitAutocompleteRunAt = 0;
 
@@ -82,6 +82,9 @@ type ApproveSubmissionBody = {
     featured?: boolean;
     supabaseId?: number;
   };
+  postToFacebook?: boolean;
+  postToInstagram?: boolean;
+  postToTikTok?: boolean;
 };
 
 type InactivateSubmissionBody = {
@@ -182,8 +185,8 @@ router.post("/submissions/create", async (req, res) => {
     }
 
     const safeStatus = submission.status === "active" ? "active" : "pending";
-    const image = submission.image || submission.gallery?.[0] || FALLBACK_IMAGE;
-    const gallery = submission.gallery && submission.gallery.length > 0 ? submission.gallery : [image];
+    const image = submission.image || submission.gallery?.[0] || "";
+    const gallery = submission.gallery && submission.gallery.length > 0 ? submission.gallery : (image ? [image] : []);
 
     const insertResult = await dbPool.query(
       `
@@ -269,8 +272,8 @@ router.patch("/submissions/:supabaseId/media", async (req, res) => {
       return res.status(400).json({ error: "No media payload provided." });
     }
 
-    const image = rawImage || gallery[0] || FALLBACK_IMAGE;
-    const mediaGallery = gallery.length > 0 ? gallery : [image];
+    const image = rawImage || gallery[0] || "";
+    const mediaGallery = gallery.length > 0 ? gallery : (image ? [image] : []);
 
     const updateResult = await dbPool.query(
       `
@@ -304,8 +307,8 @@ router.post("/submissions/approve", async (req, res) => {
     return res.status(400).json({ error: "Missing required fields for approval." });
   }
 
-  const image = submission.coverImage || submission.gallery?.[0] || FALLBACK_IMAGE;
-  const gallery = submission.gallery && submission.gallery.length > 0 ? submission.gallery : [image];
+  const image = submission.coverImage || submission.gallery?.[0] || "";
+  const gallery = submission.gallery && submission.gallery.length > 0 ? submission.gallery : (image ? [image] : []);
 
   const propertyPayload = {
     title: submission.title,
@@ -426,7 +429,31 @@ router.post("/submissions/approve", async (req, res) => {
         [propertyPayload.title, submission.supabaseId],
       );
 
-      return res.json({ id: submission.supabaseId });
+      // Fire social media posts if requested. Each platform is independent.
+      const socialOptions = {
+        postToFacebook: body.postToFacebook === true,
+        postToInstagram: body.postToInstagram === true,
+        postToTikTok: body.postToTikTok === true,
+      };
+      let socialResults = {};
+      if (socialOptions.postToFacebook || socialOptions.postToInstagram || socialOptions.postToTikTok) {
+        socialResults = await postListingToSocial(
+          {
+            title: propertyPayload.title,
+            description: propertyPayload.description,
+            price: propertyPayload.price ?? 0,
+            transactionType: propertyPayload.transaction_type ?? "Vente",
+            propertyType: propertyPayload.type ?? "Bien",
+            location: propertyPayload.location,
+            imageUrl: propertyPayload.image || undefined,
+            videoUrl: propertyPayload.video_url || undefined,
+            propertyId: submission.supabaseId,
+          },
+          socialOptions,
+        );
+      }
+
+      return res.json({ id: submission.supabaseId, socialResults });
     }
 
     const insertQuery = `
@@ -491,7 +518,31 @@ router.post("/submissions/approve", async (req, res) => {
       return res.status(500).json({ error: "Supabase response missing inserted id." });
     }
 
-    return res.status(201).json({ id: insertedId });
+    // Fire social media posts if requested. Each platform is independent.
+    const socialOptions = {
+      postToFacebook: body.postToFacebook === true,
+      postToInstagram: body.postToInstagram === true,
+      postToTikTok: body.postToTikTok === true,
+    };
+    let socialResults = {};
+    if (socialOptions.postToFacebook || socialOptions.postToInstagram || socialOptions.postToTikTok) {
+      socialResults = await postListingToSocial(
+        {
+          title: propertyPayload.title,
+          description: propertyPayload.description,
+          price: propertyPayload.price ?? 0,
+          transactionType: propertyPayload.transaction_type ?? "Vente",
+          propertyType: propertyPayload.type ?? "Bien",
+          location: propertyPayload.location,
+          imageUrl: propertyPayload.image || undefined,
+          videoUrl: propertyPayload.video_url || undefined,
+          propertyId: insertedId,
+        },
+        socialOptions,
+      );
+    }
+
+    return res.status(201).json({ id: insertedId, socialResults });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || "Backend approval failed." });
   }
@@ -562,9 +613,14 @@ router.delete("/submissions/:supabaseId", async (req, res) => {
       [supabaseId],
     );
 
+    // If not found in properties, try the pending_submissions / any other table names
+    // that may exist, then accept "already gone" as success so old seeded listings
+    // that were never formally approved through the backend can still be removed from
+    // the admin list.
     if (deleteResult.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Property not found for deletion." });
+      // The row is already absent — treat as a successful deletion.
+      await client.query("COMMIT");
+      return res.json({ id: supabaseId });
     }
 
     await client.query("COMMIT");

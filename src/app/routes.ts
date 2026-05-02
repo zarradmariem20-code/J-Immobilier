@@ -15,6 +15,7 @@ import Messages from "./pages/Messages";
 import Notifications from "./pages/Notifications";
 import AccountSettings from "./pages/AccountSettings";
 import LanguageSettings from "./pages/LanguageSettings";
+import AdminSettings from "./pages/AdminSettings";
 
 export const router = createBrowserRouter([
       {
@@ -76,6 +77,10 @@ export const router = createBrowserRouter([
   {
     path: "/admin/checklist",
     Component: Admin,
+  },
+  {
+    path: "/admin/settings",
+    Component: AdminSettings,
   },
   {
     path: "/account",

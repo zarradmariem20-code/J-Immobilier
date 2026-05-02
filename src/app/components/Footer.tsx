@@ -1,12 +1,13 @@
 import { Mail, Phone, MapPin } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { BrandLogo } from "./BrandLogo";
-import { companyOfficeAddress, companyPhoneDisplay } from "../utils/company";
+import { getPublicSiteSettings, type SiteSettings } from "../../lib/api";
 import facebookLogo from "../../assets/Facebook_Logo.png";
 import instagramLogo from "../../assets/insta.avif";
 import tiktokLogo from "../../assets/tiktok-.webp";
 
-const footerSocialLinks = [
+const defaultFooterSocialLinks = [
   {
     label: "Facebook",
     href: "https://www.facebook.com/profile.php?id=100054570723975&sk=followers",
@@ -22,9 +23,57 @@ const footerSocialLinks = [
     href: "https://www.tiktok.com/@journal_immo2?is_from_webapp=1&sender_device=pc",
     logoSrc: tiktokLogo,
   },
-];
+] as const;
 
 export function Footer() {
+  const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    getPublicSiteSettings()
+      .then((data) => {
+        if (mounted) setSiteSettings(data);
+      })
+      .catch(() => {
+        // Keep fallback values when settings endpoint is unavailable.
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const companyOfficeAddress = useMemo(() => {
+    const lines = siteSettings?.contact.officeAddressLines;
+    if (Array.isArray(lines) && lines.length > 0) {
+      return lines.filter(Boolean).join(", ");
+    }
+    return "Bouhsina, Sousse, Tunisie";
+  }, [siteSettings]);
+
+  const companyPhoneDisplay = useMemo(() => {
+    if (!siteSettings) return "+216 97 222 822 / +216 27 037 037";
+    const primary = siteSettings.contact.primaryPhone?.trim() || "";
+    const secondary = siteSettings.contact.secondaryPhone?.trim() || "";
+    if (primary && secondary) return `${primary} / ${secondary}`;
+    return primary || secondary || "+216 97 222 822";
+  }, [siteSettings]);
+
+  const footerEmail = siteSettings?.contact.email || "contact@journalimmobilier.tn";
+
+  const footerSocialLinks = useMemo(() => {
+    if (!siteSettings?.socialLinks) {
+      return defaultFooterSocialLinks;
+    }
+
+    return [
+      { label: "Facebook", href: siteSettings.socialLinks.facebook || defaultFooterSocialLinks[0].href, logoSrc: facebookLogo },
+      { label: "Instagram", href: siteSettings.socialLinks.instagram || defaultFooterSocialLinks[1].href, logoSrc: instagramLogo },
+      { label: "TikTok", href: siteSettings.socialLinks.tiktok || defaultFooterSocialLinks[2].href, logoSrc: tiktokLogo },
+    ] as const;
+  }, [siteSettings]);
+
   return (
     <footer className="relative overflow-hidden bg-slate-950 text-white">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
@@ -106,7 +155,7 @@ export function Footer() {
               </li>
               <li className="flex items-center gap-2 text-sm text-slate-400">
                 <Mail className="h-4 w-4 flex-shrink-0" />
-                <span>contact@journalimmobilier.tn</span>
+                <span>{footerEmail}</span>
               </li>
             </ul>
           </div>

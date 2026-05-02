@@ -16,6 +16,7 @@ import {
   Trash2,
   Check,
   XCircle,
+  Settings,
 } from "lucide-react";
 import { Link } from "react-router";
 import {
@@ -109,6 +110,9 @@ export function Admin() {
   const [actionError, setActionError] = useState("");
   const [selectedListingIds, setSelectedListingIds] = useState<string[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+    const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
+    const [socialOptions, setSocialOptions] = useState({ facebook: false, instagram: false, tiktok: false });
+    const [socialResultMsg, setSocialResultMsg] = useState("");
 
   const [adminSession, setAdminSessionState] = useState<AdminSession | null>(getAdminSession());
   const [loginPassword, setLoginPassword] = useState("");
@@ -1269,7 +1273,7 @@ export function Admin() {
     }
   };
 
-  const updateStatus = async (id: string, status: ListingSubmission["status"]) => {
+  const updateStatus = async (id: string, status: ListingSubmission["status"], socialOpts?: { facebook: boolean; instagram: boolean; tiktok: boolean }) => {
     const submission = allItems.find((item) => item.id === id);
     if (!submission) return;
     const isDbPublishedOnly = submission.id.startsWith("db-");
@@ -1305,7 +1309,7 @@ export function Admin() {
             return;
           }
 
-          const publishedId = await approveListingWithBackend({
+          const approvalResult = await approveListingWithBackend({
             id: submission.id,
             title: submission.title,
             price: submission.price,
@@ -1327,7 +1331,19 @@ export function Admin() {
             tags: submission.tags ?? [],
             featured: submission.featured,
             supabaseId: submission.supabaseId,
+            postToFacebook: socialOpts?.facebook ?? false,
+            postToInstagram: socialOpts?.instagram ?? false,
+            postToTikTok: socialOpts?.tiktok ?? false,
           });
+          const publishedId = approvalResult.id;
+          const sr = approvalResult.socialResults;
+          if (sr && (sr.facebook || sr.instagram || sr.tiktok)) {
+            const msgs: string[] = [];
+            if (sr.facebook) msgs.push(sr.facebook.success ? "FB ✅" : `FB ❌ ${sr.facebook.error ?? ""}`);
+            if (sr.instagram) msgs.push(sr.instagram.success ? "IG ✅" : `IG ❌ ${sr.instagram.error ?? ""}`);
+            if (sr.tiktok) msgs.push(sr.tiktok.success ? "TT ✅" : `TT ❌ ${sr.tiktok.error ?? ""}`);
+            setSocialResultMsg(msgs.join(" · "));
+          }
 
           clearListingsCache();
           setPublishedItems((prev) =>
@@ -1350,7 +1366,7 @@ export function Admin() {
       }
 
       if (status === "approved") {
-        const publishedId = await approveListingWithBackend({
+        const approvalResult = await approveListingWithBackend({
           id: submission.id,
           title: submission.title,
           price: submission.price,
@@ -1372,7 +1388,19 @@ export function Admin() {
           tags: submission.tags ?? [],
           featured: submission.featured,
           supabaseId: submission.supabaseId,
+          postToFacebook: socialOpts?.facebook ?? false,
+          postToInstagram: socialOpts?.instagram ?? false,
+          postToTikTok: socialOpts?.tiktok ?? false,
         });
+        const publishedId = approvalResult.id;
+        const sr = approvalResult.socialResults;
+        if (sr && (sr.facebook || sr.instagram || sr.tiktok)) {
+          const msgs: string[] = [];
+          if (sr.facebook) msgs.push(sr.facebook.success ? "FB ✅" : `FB ❌ ${sr.facebook.error ?? ""}`);
+          if (sr.instagram) msgs.push(sr.instagram.success ? "IG ✅" : `IG ❌ ${sr.instagram.error ?? ""}`);
+          if (sr.tiktok) msgs.push(sr.tiktok.success ? "TT ✅" : `TT ❌ ${sr.tiktok.error ?? ""}`);
+          setSocialResultMsg(msgs.join(" · "));
+        }
 
         updateListingSubmissionStatus(id, status, publishedId);
 
@@ -1574,6 +1602,7 @@ export function Admin() {
     { key: "listings", label: "Annonces", icon: Clock3, path: "/admin/listings", badgeCount: pendingListingsNotificationCount },
     { key: "visits", label: "Visites", icon: CalendarDays, path: "/admin/visits", badgeCount: pendingVisitsNotificationCount },
     { key: "contracts", label: "Contrats", icon: FileText, path: "/admin/contracts", badgeCount: 0 },
+    { key: "settings", label: "Paramètres", icon: Settings, path: "/admin/settings", badgeCount: 0 },
   ] as const;
 
   return (
@@ -1584,6 +1613,57 @@ export function Admin() {
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
+        {pendingApprovalId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+              <h3 className="text-lg font-bold text-slate-900">Approuver et publier</h3>
+              <p className="mt-1 text-sm text-slate-500">Publier automatiquement sur les réseaux sociaux ?</p>
+              <div className="mt-4 space-y-3">
+                {([
+                  { key: "facebook", label: "Facebook", color: "text-blue-700" },
+                  { key: "instagram", label: "Instagram", color: "text-pink-600" },
+                  { key: "tiktok", label: "TikTok", color: "text-slate-900" },
+                ] as const).map(({ key, label, color }) => (
+                  <label key={key} className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 transition hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={socialOptions[key]}
+                      onChange={(e) => setSocialOptions((o) => ({ ...o, [key]: e.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    <span className={`text-sm font-semibold ${color}`}>{label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="mt-5 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = pendingApprovalId;
+                    setPendingApprovalId(null);
+                    updateStatus(id, "approved", socialOptions);
+                  }}
+                  className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  Confirmer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingApprovalId(null)}
+                  className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {socialResultMsg && (
+          <div className="fixed bottom-5 right-5 z-50 flex max-w-sm items-start gap-3 rounded-2xl border border-sky-200 bg-white px-4 py-3 shadow-xl">
+            <span className="text-xs font-semibold text-sky-700">Réseaux sociaux : {socialResultMsg}</span>
+            <button type="button" onClick={() => setSocialResultMsg("")} className="ml-2 text-slate-400 hover:text-slate-700">✕</button>
+          </div>
+        )}
       <div className="mx-auto flex w-full max-w-[112rem] flex-col gap-5 px-4 py-4 sm:px-6 sm:py-5 lg:flex-row lg:px-8">
         <aside className="hidden min-h-[calc(100vh-2.5rem)] w-[250px] flex-col justify-between rounded-[22px] border border-sky-200/80 bg-white/72 px-4 py-4 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md lg:flex">
           <div>
@@ -1739,356 +1819,7 @@ export function Admin() {
             </div>
           </div>
 
-          {activeView === "dashboard" && false && (
-            <div className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-[16px] border border-amber-200/80 bg-amber-50/80 p-4 ring-1 ring-amber-100/70 shadow-[0_8px_16px_rgba(180,83,9,0.08)] backdrop-blur-md">
-                  <div className="text-xs font-semibold uppercase tracking-[0.15em] text-amber-700">Urgences du jour</div>
-                  <div className="mt-2 text-3xl font-bold text-amber-900">{dashboardInsights.pendingOlderThan24h + dashboardInsights.newVisitsOlderThan2h}</div>
-                  <div className="mt-1 text-xs text-amber-800/80">Annonces en retard + prospects sans retour</div>
-                </div>
-                <div className="rounded-[16px] border border-emerald-200/80 bg-emerald-50/80 p-4 ring-1 ring-emerald-100/70 shadow-[0_8px_16px_rgba(5,150,105,0.08)] backdrop-blur-md">
-                  <div className="text-xs font-semibold uppercase tracking-[0.15em] text-emerald-700">SLA moderation</div>
-                  <div className="mt-2 text-3xl font-bold text-emerald-900">{dashboardInsights.slaReviewRate.toFixed(1)}%</div>
-                  <div className="mt-1 text-xs text-emerald-800/80">Annonces revues en moins de 24h</div>
-                </div>
-                <div className="rounded-[16px] border border-rose-200/80 bg-rose-50/80 p-4 ring-1 ring-rose-100/70 shadow-[0_8px_16px_rgba(190,24,93,0.08)] backdrop-blur-md">
-                  <div className="text-xs font-semibold uppercase tracking-[0.15em] text-rose-700">Fuite conversion</div>
-                  <div className="mt-2 text-3xl font-bold text-rose-900">{dashboardInsights.conversionLeakCount}</div>
-                  <div className="mt-1 text-xs text-rose-800/80">Leads non transformés en visites planifiées</div>
-                </div>
-                <div className="rounded-[16px] border border-blue-200/80 bg-blue-50/80 p-4 ring-1 ring-blue-100/70 shadow-[0_8px_16px_rgba(37,99,235,0.08)] backdrop-blur-md">
-                  <div className="text-xs font-semibold uppercase tracking-[0.15em] text-blue-700">Charge 48h</div>
-                  <div className="mt-2 text-3xl font-bold text-blue-900">{dashboardInsights.upcoming48h + metrics.pending}</div>
-                  <div className="mt-1 text-xs text-blue-800/80">Visites planifiées + annonces encore en file</div>
-                </div>
-                <div className="rounded-[16px] border border-violet-200/80 bg-violet-50/80 p-4 ring-1 ring-violet-100/70 shadow-[0_8px_16px_rgba(109,40,217,0.08)] backdrop-blur-md">
-                  <div className="text-xs font-semibold uppercase tracking-[0.15em] text-violet-700">Qualité fiches</div>
-                  <div className="mt-2 text-3xl font-bold text-violet-900">{dashboardInsights.qualityAlerts}</div>
-                  <div className="mt-1 text-xs text-violet-800/80">Annonces visibles avec médias insuffisants</div>
-                </div>
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-                <section className="rounded-[22px] border border-sky-200/80 bg-white/85 p-5 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Things to do</p>
-                      <h2 className="mt-1 text-xl font-semibold text-slate-950">Priorités opérationnelles</h2>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => navigate("/admin/visits")}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-300 hover:text-sky-700"
-                    >
-                      Ouvrir visites
-                    </button>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {dashboardInsights.todayTodo.length === 0 ? (
-                      <article className="rounded-2xl border border-slate-200 bg-slate-50/85 p-3.5">
-                        <p className="text-sm font-semibold text-slate-900">Aucune action prioritaire pour le moment.</p>
-                      </article>
-                    ) : (
-                      paginatedDashboardTodo.map((todo, index) => (
-                        <article key={todo.id} className="rounded-2xl border border-slate-200 bg-slate-50/85 p-3.5 sm:col-span-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-semibold text-slate-900">{(dashboardTodoPage - 1) * PAGE_SIZE + index + 1}. {todo.title}</p>
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${
-                                todo.priority === "Critique"
-                                  ? "bg-rose-100 text-rose-700"
-                                  : todo.priority === "Moyen"
-                                    ? "bg-amber-100 text-amber-700"
-                                    : "bg-emerald-100 text-emerald-700"
-                              }`}
-                            >
-                              {todo.priority}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-slate-600">{todo.detail}</p>
-                          <button
-                            type="button"
-                            onClick={() => navigate(todo.route)}
-                            className="mt-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:border-sky-300 hover:text-sky-700"
-                          >
-                            Ouvrir
-                          </button>
-                        </article>
-                      ))
-                    )}
-                  </div>
-
-                  {dashboardInsights.todayTodo.length > PAGE_SIZE && (
-                    <div className="mt-3 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
-                      <span>Page {dashboardTodoPage} / {totalDashboardTodoPages}</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setDashboardTodoPage((current) => Math.max(1, current - 1))}
-                          disabled={dashboardTodoPage === 1}
-                          className="rounded-lg border border-slate-200 px-2 py-1 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Precedent
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDashboardTodoPage((current) => Math.min(totalDashboardTodoPages, current + 1))}
-                          disabled={dashboardTodoPage === totalDashboardTodoPages}
-                          className="rounded-lg border border-slate-200 px-2 py-1 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Suivant
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    <button
-                      type="button"
-                      onClick={() => navigate("/submit-listing")}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
-                    >
-                      Publier une annonce
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate("/admin/listings?status=pending")}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
-                    >
-                      Traiter la file annonces
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate("/admin/dashboard")}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-violet-300 hover:text-violet-700"
-                    >
-                      Rafraichir tableau de bord
-                    </button>
-                  </div>
-                </section>
-
-                <section className="space-y-5">
-                  <div className="rounded-[22px] border border-sky-200/80 bg-white/85 p-5 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Opportunité chaude</p>
-                    <h3 className="mt-1 text-lg font-semibold text-slate-950">Annonce la plus demandée sans visite calée</h3>
-                    <p className="mt-3 text-sm font-semibold text-slate-900">{dashboardInsights.bestOpportunity?.propertyTitle ?? "Aucune opportunité détectée"}</p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      {dashboardInsights.bestOpportunity ? `${dashboardInsights.bestOpportunity.count} demandes actives` : "Toutes les annonces demandées ont une suite."}
-                    </p>
-                  </div>
-
-                  <div className="rounded-[22px] border border-sky-200/80 bg-white/85 p-5 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Blocages à lever</p>
-                    <div className="mt-3 space-y-2.5">
-                      <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700">Visites imminentes</p>
-                        <p className="mt-1 text-lg font-bold text-rose-900">{dashboardInsights.upcoming24h}</p>
-                        <p className="mt-1 text-[11px] text-rose-700/80">Dans les 24 prochaines heures</p>
-                        <button
-                          type="button"
-                          onClick={() => navigate("/admin/visits?visitStatus=scheduled&visitSortBy=date&visitSortDirection=asc")}
-                          className="mt-2 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-100"
-                        >
-                          Voir
-                        </button>
-                      </div>
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">Nouvelles demandes non traitées</p>
-                        <p className="mt-1 text-lg font-bold text-amber-900">{dashboardInsights.newVisitsOlderThan2h}</p>
-                        <button
-                          type="button"
-                          onClick={() => navigate("/admin/visits?visitStatus=new&visitSortBy=status&visitSortDirection=desc")}
-                          className="mt-2 rounded-lg border border-amber-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-700 transition hover:bg-amber-100"
-                        >
-                          Voir
-                        </button>
-                      </div>
-                      <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Pending {">"} 24h</p>
-                        <p className="mt-1 text-lg font-bold text-blue-900">{dashboardInsights.pendingOlderThan24h}</p>
-                        <button
-                          type="button"
-                          onClick={() => navigate("/admin/listings?status=pending")}
-                          className="mt-2 rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
-                        >
-                          Voir
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            </div>
-          )}
-
-          {activeView === "listings" && (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-              <div className="rounded-[16px] border border-sky-200/80 bg-white/80 p-4 ring-1 ring-sky-100/70 shadow-[0_8px_16px_rgba(14,116,144,0.08)] backdrop-blur-md">
-                <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Parc d'annonces</div>
-                <div className="mt-2 text-3xl font-bold text-slate-900">{metrics.total}</div>
-                <div className="mt-1 text-xs text-slate-500">Total inventaire modéré</div>
-              </div>
-              <div className="rounded-[16px] border border-sky-200/80 bg-white/80 p-4 ring-1 ring-sky-100/70 shadow-[0_8px_16px_rgba(14,116,144,0.08)] backdrop-blur-md">
-                <div className="text-xs font-semibold uppercase tracking-[0.15em] text-amber-600">En attente</div>
-                <div className="mt-2 text-3xl font-bold text-amber-700">{metrics.pending}</div>
-                <div className="mt-1 text-xs text-slate-500">{listingRates.pendingPct.toFixed(1)}% du total</div>
-              </div>
-              <div className="rounded-[16px] border border-sky-200/80 bg-white/80 p-4 ring-1 ring-sky-100/70 shadow-[0_8px_16px_rgba(14,116,144,0.08)] backdrop-blur-md">
-                <div className="text-xs font-semibold uppercase tracking-[0.15em] text-rose-600">Invisibles</div>
-                <div className="mt-2 text-3xl font-bold text-rose-700">{metrics.rejected}</div>
-                <div className="mt-1 text-xs text-slate-500">{listingRates.rejectedPct.toFixed(1)}% du total</div>
-              </div>
-              <div className="rounded-[16px] border border-sky-200/80 bg-white/80 p-4 ring-1 ring-sky-100/70 shadow-[0_8px_16px_rgba(14,116,144,0.08)] backdrop-blur-md">
-                <div className="text-xs font-semibold uppercase tracking-[0.15em] text-emerald-600">Visibles</div>
-                <div className="mt-2 text-3xl font-bold text-emerald-700">{metrics.approved}</div>
-                <div className="mt-1 text-xs text-slate-500">{listingRates.approvedPct.toFixed(1)}% du total</div>
-              </div>
-              <div className="rounded-[16px] border border-sky-200/80 bg-white/80 p-4 ring-1 ring-sky-100/70 shadow-[0_8px_16px_rgba(14,116,144,0.08)] backdrop-blur-md">
-                <div className="text-xs font-semibold uppercase tracking-[0.15em] text-blue-600">Mises en avant</div>
-                <div className="mt-2 text-3xl font-bold text-blue-700">{metrics.featured}</div>
-                <div className="mt-1 text-xs text-slate-500">{listingRates.featuredPct.toFixed(1)}% du total</div>
-              </div>
-            </div>
-          )}
-
-          {activeView === "dashboard" && (
-            <div className="space-y-5">
-            <section className="rounded-[22px] border border-sky-200/80 bg-white/85 p-5 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">KPIs trafic & conversion</p>
-                  <h2 className="mt-1 text-xl font-semibold text-slate-950">Performance du site - {visitsWindowLabel}</h2>
-                </div>
-                <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-                  {[
-                    { key: "today", label: "Aujourd'hui" },
-                    { key: "7d", label: "7 jours" },
-                    { key: "30d", label: "30 jours" },
-                  ].map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      onClick={() => setVisitsWindow(option.key as "today" | "7d" | "30d")}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                        visitsWindow === option.key
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">Visites web</div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">{visitsKpis.total}</div>
-                </div>
-                <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">Leads entrants</div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">{visitsKpis.newCount}</div>
-                </div>
-                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Taux de planification</div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">{visitsKpis.schedulingRate.toFixed(1)}%</div>
-                </div>
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">Same-day schedule</div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">{visitsKpis.sameDayRate.toFixed(1)}%</div>
-                </div>
-                <div className="rounded-2xl border border-violet-100 bg-violet-50/70 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-700">Temps moyen</div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">{visitsKpis.avgHoursToSchedule.toFixed(1)}h</div>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 xl:col-span-2">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">Top annonce la plus vue</div>
-                  <div className="mt-2 text-lg font-bold text-slate-900">{topViewedListing?.propertyTitle ?? "Aucune donnée"}</div>
-                  <div className="mt-1 text-sm text-slate-600">{topViewedListing ? `${topViewedListing.count} vues qualifiées` : "Aucune visite enregistrée"}</div>
-                </div>
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">Completion</div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">{visitsKpis.completionRate.toFixed(1)}%</div>
-                </div>
-                <div className="rounded-2xl border border-rose-100 bg-rose-50/70 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700">Demandes refusées</div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">{visitsKpis.rejectedCount}</div>
-                </div>
-              </div>
-            </section>
-
-            <div className="grid gap-5 xl:grid-cols-[1.45fr_0.95fr]">
-            <section style={{ animation: "adminFadeUp 0.55s ease both", animationDelay: "400ms" }} className="relative overflow-hidden rounded-[22px] border border-sky-200/60 bg-[linear-gradient(155deg,rgba(255,255,255,0.98)_0%,rgba(240,249,255,0.96)_100%)] p-5 shadow-[0_16px_34px_rgba(14,116,144,0.12)]">
-              <div className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full bg-sky-200/18 blur-3xl" />
-              <div className="pointer-events-none absolute -left-8 bottom-0 h-32 w-32 rounded-full bg-blue-200/10 blur-3xl" />
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Performance</p>
-                  <h2 className="mt-1 text-xl font-semibold text-slate-950">Trafic quotidien qualifié</h2>
-                </div>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">{visitsWindowLabel}</span>
-              </div>
-              <div className="mt-5 grid grid-cols-7 gap-3">
-                {weeklySeries.map((point) => (
-                  <div key={point.label} className="flex flex-col items-center gap-2">
-                    <div className="flex h-44 w-full items-end rounded-2xl bg-[linear-gradient(180deg,rgba(14,116,144,0.07)_0%,rgba(59,130,246,0.04)_100%)] px-2 pb-2">
-                      <div
-                        className="w-full rounded-xl bg-[linear-gradient(180deg,#7dd3fc_0%,#3b82f6_45%,#1d4ed8_100%)] shadow-[0_4px_10px_rgba(59,130,246,0.28)] transition-all"
-                        style={{ height: `${Math.max(10, point.percent)}%` }}
-                        title={`${point.value} visites`}
-                      />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500">{point.label}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="space-y-5">
-              <div style={{ animation: "adminFadeUp 0.55s ease both", animationDelay: "480ms" }} className="relative overflow-hidden rounded-[22px] border border-sky-200/60 bg-[linear-gradient(150deg,rgba(255,255,255,0.98)_0%,rgba(240,249,255,0.95)_100%)] p-5 shadow-[0_16px_34px_rgba(14,116,144,0.12)]">
-                <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-sky-200/18 blur-3xl" />
-                <p className="relative text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Repartition</p>
-                <h2 className="mt-1 text-xl font-semibold text-slate-950">Entonnoir de conversion</h2>
-                <div className="mt-5 flex items-center gap-5">
-                  <div
-                    className="h-32 w-32 rounded-full border-[10px] border-white shadow-inner"
-                    style={{ background: donutGradient }}
-                  />
-                  <div className="space-y-2">
-                    {visitStatusBreakdown.map((row) => (
-                      <div key={row.key} className="flex items-center gap-2 text-sm text-slate-700">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} />
-                        <span className="font-medium">{row.label}</span>
-                        <span className="text-slate-500">{row.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ animation: "adminFadeUp 0.55s ease both", animationDelay: "560ms" }} className="relative overflow-hidden rounded-[22px] border border-sky-200/60 bg-[linear-gradient(150deg,rgba(255,255,255,0.98)_0%,rgba(240,249,255,0.95)_100%)] p-5 shadow-[0_16px_34px_rgba(14,116,144,0.12)]">
-                <div className="pointer-events-none absolute -right-10 bottom-0 h-32 w-32 rounded-full bg-blue-200/12 blur-3xl" />
-                <p className="relative text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Top annonces vues</p>
-                <div className="mt-3 space-y-2.5">
-                  {topRequestedListings.length === 0 && <p className="text-sm text-slate-500">Aucune donnée de vue pour le moment.</p>}
-                  {topRequestedListings.map((item, index) => (
-                    <div key={`${item.propertyId}-${index}`} className="relative overflow-hidden rounded-xl border border-slate-100 bg-[linear-gradient(135deg,rgba(240,249,255,0.88)_0%,rgba(255,255,255,0.97)_100%)] px-3 py-2.5 pl-4 shadow-[inset_3px_0_0_rgba(56,189,248,0.55)]">
-                      <p className="text-sm font-semibold text-slate-900">{item.propertyTitle}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">{item.count} visites qualifiées</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-            </div>
-            </div>
-          )}
+          {activeView === "dashboard" && false && null}
 
           {activeView === "listings" && (
             <section className="rounded-[22px] border border-sky-200/80 bg-white/80 p-4 ring-1 ring-sky-100/70 shadow-[0_16px_34px_rgba(14,116,144,0.12)] backdrop-blur-md sm:p-5">
@@ -2342,7 +2073,9 @@ export function Admin() {
                                   type="button"
                                   onClick={() => {
                                     setActionMenuId(null);
-                                    updateStatus(item.id, "approved");
+                                    setSocialOptions({ facebook: false, instagram: false, tiktok: false });
+                                    setSocialResultMsg("");
+                                    setPendingApprovalId(item.id);
                                   }}
                                   disabled={isBusy}
                                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-400"
@@ -3042,3 +2775,4 @@ export function Admin() {
     </div>
   );
 }
+

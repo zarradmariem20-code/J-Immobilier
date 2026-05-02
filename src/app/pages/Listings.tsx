@@ -33,6 +33,10 @@ const propertyTypesWithRoomFilters = new Set(["Appartement", "Villa", "Immeuble"
 
 export function Listings() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const parsedPerPage = Number.parseInt(searchParams.get("perPage") ?? "25", 10);
+  const initialPerPage = [25, 50, 100].includes(parsedPerPage) ? parsedPerPage : 25;
+  const parsedPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
+  const initialPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
   const [filterType, setFilterType] = useState<string>(searchParams.get("type") ?? "all");
   const [transactionType, setTransactionType] = useState<string>(searchParams.get("transaction") ?? "all");
   const [selectedRegion, setSelectedRegion] = useState<string>(searchParams.get("region") ?? "all");
@@ -45,6 +49,8 @@ export function Listings() {
   const [sortBy, setSortBy] = useState<string>(searchParams.get("sort") ?? "newest");
   const [featuredOnly, setFeaturedOnly] = useState(searchParams.get("featured") === "1");
   const [recentOnly, setRecentOnly] = useState(searchParams.get("recent") === "1");
+  const [listingsPerPage, setListingsPerPage] = useState<number>(initialPerPage);
+  const [currentPage, setCurrentPage] = useState<number>(initialPage);
   const [allProperties, setAllProperties] = useState<Property[]>(() => getCachedPublicProperties());
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [typeOpen, setTypeOpen] = useState(false);
@@ -229,8 +235,14 @@ export function Listings() {
     if (recentOnly) {
       params.set("recent", "1");
     }
+    if (listingsPerPage !== 25) {
+      params.set("perPage", String(listingsPerPage));
+    }
+    if (currentPage > 1) {
+      params.set("page", String(currentPage));
+    }
     setSearchParams(params, { replace: true });
-  }, [bathroomFilter, bedroomFilter, featuredOnly, filterType, priceRange, propertyCategory, recentOnly, searchTerm, selectedCity, selectedRegion, setSearchParams, sortBy, transactionType]);
+  }, [bathroomFilter, bedroomFilter, currentPage, featuredOnly, filterType, listingsPerPage, priceRange, propertyCategory, recentOnly, searchTerm, selectedCity, selectedRegion, setSearchParams, sortBy, transactionType]);
 
   useEffect(() => {
     loadAllProperties(true);
@@ -369,6 +381,22 @@ export function Listings() {
     }
     return right.id - left.id;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredProperties.length / listingsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * listingsPerPage;
+  const endIndex = startIndex + listingsPerPage;
+  const paginatedProperties = filteredProperties.slice(startIndex, endIndex);
+
+  useEffect(() => {
+    if (safeCurrentPage !== currentPage) {
+      setCurrentPage(safeCurrentPage);
+    }
+  }, [currentPage, safeCurrentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [bathroomFilter, bedroomFilter, featuredOnly, filterType, listingsPerPage, priceRange, propertyCategory, recentOnly, searchTerm, selectedCity, selectedRegion, sortBy, transactionType]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -670,51 +698,93 @@ export function Listings() {
             <>
               <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-slate-600">
-                  Affichage de {filteredProperties.length} {filteredProperties.length === 1 ? 'propriété' : 'propriétés'}
+                  Affichage de {startIndex + 1}-{Math.min(endIndex, filteredProperties.length)} sur {filteredProperties.length} {filteredProperties.length === 1 ? "propriété" : "propriétés"}
                 </p>
-                <div className="relative self-start sm:self-auto" ref={sortRef}>
-                  <button
-                    type="button"
-                    onClick={() => setSortOpen((prev) => !prev)}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-sky-300 hover:text-sky-700"
-                  >
-                    Trier
-                    <span className="hidden text-slate-400 sm:inline">
-                      · {sortBy === "featured" ? "Mise en avant" : sortBy === "price-asc" ? "Prix croissant" : sortBy === "price-desc" ? "Prix décroissant" : sortBy === "area-desc" ? "Surface décroissante" : "Plus récentes"}
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+                    <span className="text-slate-500">Par page</span>
+                    <span className="relative inline-flex items-center">
+                      <select
+                        value={String(listingsPerPage)}
+                        onChange={(event) => setListingsPerPage(Number(event.target.value))}
+                        className="appearance-none border-0 bg-transparent p-0 pr-5 font-semibold text-slate-900 outline-none focus:outline-none focus-visible:outline-none"
+                      >
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-0 h-3.5 w-3.5 text-slate-400" />
                     </span>
-                    <ChevronDown className={`h-4 w-4 transition ${sortOpen ? "rotate-180" : "rotate-0"}`} />
-                  </button>
+                  </label>
 
-                  {sortOpen && (
-                    <div className="absolute right-0 top-full z-[140] mt-2 w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-[0_20px_45px_rgba(15,23,42,0.16)]">
-                      {[
-                        { value: "newest", label: "Plus récentes" },
-                        { value: "featured", label: "Mise en avant" },
-                        { value: "price-asc", label: "Prix croissant" },
-                        { value: "price-desc", label: "Prix décroissant" },
-                        { value: "area-desc", label: "Surface décroissante" },
-                      ].map((item) => (
-                        <button
-                          key={item.value}
-                          type="button"
-                          onClick={() => {
-                            setSortBy(item.value);
-                            setSortOpen(false);
-                          }}
-                          className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${sortBy === item.value ? "bg-slate-950 text-white" : "text-slate-700 hover:bg-slate-100"}`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="relative self-start sm:self-auto" ref={sortRef}>
+                    <button
+                      type="button"
+                      onClick={() => setSortOpen((prev) => !prev)}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-sky-300 hover:text-sky-700"
+                    >
+                      Trier
+                      <span className="hidden text-slate-400 sm:inline">
+                        · {sortBy === "featured" ? "Mise en avant" : sortBy === "price-asc" ? "Prix croissant" : sortBy === "price-desc" ? "Prix décroissant" : sortBy === "area-desc" ? "Surface décroissante" : "Plus récentes"}
+                      </span>
+                      <ChevronDown className={`h-4 w-4 transition ${sortOpen ? "rotate-180" : "rotate-0"}`} />
+                    </button>
+
+                    {sortOpen && (
+                      <div className="absolute right-0 top-full z-[140] mt-2 w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-[0_20px_45px_rgba(15,23,42,0.16)]">
+                        {[
+                          { value: "newest", label: "Plus récentes" },
+                          { value: "featured", label: "Mise en avant" },
+                          { value: "price-asc", label: "Prix croissant" },
+                          { value: "price-desc", label: "Prix décroissant" },
+                          { value: "area-desc", label: "Surface décroissante" },
+                        ].map((item) => (
+                          <button
+                            key={item.value}
+                            type="button"
+                            onClick={() => {
+                              setSortBy(item.value);
+                              setSortOpen(false);
+                            }}
+                            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${sortBy === item.value ? "bg-slate-950 text-white" : "text-slate-700 hover:bg-slate-100"}`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
-                {filteredProperties.map((property) => (
+                {paginatedProperties.map((property) => (
                   <PropertyCard key={property.id} property={property} />
                 ))}
               </div>
+
+              {totalPages > 1 && (
+                <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={safeCurrentPage === 1}
+                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-sky-300 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Page précédente
+                  </button>
+                  <p className="text-sm text-slate-600">
+                    Page {safeCurrentPage} / {totalPages}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={safeCurrentPage === totalPages}
+                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-sky-300 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Page suivante
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <div className="rounded-[28px] border border-dashed border-slate-300 bg-white/80 py-16 text-center shadow-sm">

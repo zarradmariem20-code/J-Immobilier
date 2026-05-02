@@ -1,9 +1,9 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
 import { Mail, Phone, MapPin, Clock } from "lucide-react";
 import { saveInquiry } from "../utils/storage";
-import { companyOfficeAddressLines, companyOfficeMapQuery, companyPhoneDisplay } from "../utils/company";
+import { getPublicSiteSettings, type SiteSettings } from "../../lib/api";
 
 export function Contact() {
   const [formState, setFormState] = useState({
@@ -15,6 +15,39 @@ export function Contact() {
     message: "",
   });
   const [feedback, setFeedback] = useState("");
+  const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    getPublicSiteSettings()
+      .then((data) => {
+        if (mounted) setSiteSettings(data);
+      })
+      .catch(() => {
+        // Keep existing UI with default fallbacks if settings endpoint is unavailable.
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const officeAddressLines = siteSettings?.contact.officeAddressLines ?? ["Bouhsina", "Sousse, Tunisie"];
+  const officeMapQuery = siteSettings?.contact.officeMapQuery ?? "Bouhsina Sousse Tunisie";
+  const officePhoneDisplay = useMemo(() => {
+    if (!siteSettings) return "+216 97 222 822 / +216 27 037 037";
+    const primary = siteSettings.contact.primaryPhone?.trim() || "";
+    const secondary = siteSettings.contact.secondaryPhone?.trim() || "";
+    if (primary && secondary) return `${primary} / ${secondary}`;
+    return primary || secondary || "+216 97 222 822";
+  }, [siteSettings]);
+  const officeEmail = siteSettings?.contact.email ?? "contact@journalimmobilier.tn";
+  const openingHours = siteSettings?.contact.openingHours ?? [
+    "Lundi - Vendredi : 8h30 - 18h00",
+    "Samedi : 9h00 - 14h00",
+    "Dimanche : Fermé",
+  ];
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -78,8 +111,8 @@ export function Contact() {
                   <div>
                     <h3 className="font-semibold text-black mb-1">Adresse du Bureau</h3>
                     <p className="text-gray-600">
-                      {companyOfficeAddressLines[0]}<br />
-                      {companyOfficeAddressLines[1]}
+                      {officeAddressLines[0] ?? ""}<br />
+                      {officeAddressLines[1] ?? ""}
                     </p>
                   </div>
                 </div>
@@ -90,7 +123,7 @@ export function Contact() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-black mb-1">Téléphone</h3>
-                    <p className="text-gray-600">{companyPhoneDisplay}</p>
+                    <p className="text-gray-600">{officePhoneDisplay}</p>
                   </div>
                 </div>
 
@@ -100,7 +133,7 @@ export function Contact() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-black mb-1">Email</h3>
-                    <p className="text-gray-600">contact@journalimmobilier.tn</p>
+                    <p className="text-gray-600">{officeEmail}</p>
                   </div>
                 </div>
 
@@ -111,9 +144,12 @@ export function Contact() {
                   <div>
                     <h3 className="font-semibold text-black mb-1">Horaires d'Ouverture</h3>
                     <p className="text-gray-600">
-                      Lundi - Vendredi : 8h30 - 18h00<br />
-                      Samedi : 9h00 - 14h00<br />
-                      Dimanche : Fermé
+                      {openingHours.map((line, index) => (
+                        <span key={`${line}-${index}`}>
+                          {line}
+                          {index < openingHours.length - 1 ? <br /> : null}
+                        </span>
+                      ))}
                     </p>
                   </div>
                 </div>
@@ -226,12 +262,37 @@ export function Contact() {
           <div className="overflow-hidden rounded-[24px] border border-slate-200 shadow-lg sm:rounded-[32px]">
             <iframe
               title="Carte du bureau"
-              src={`https://www.google.com/maps?q=${encodeURIComponent(companyOfficeMapQuery)}&output=embed`}
+              src={`https://www.google.com/maps?q=${encodeURIComponent(officeMapQuery)}&output=embed`}
               className="h-72 w-full sm:h-96"
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
             />
           </div>
+
+          {siteSettings?.bureaus?.length ? (
+            <div className="mt-8">
+              <h3 className="mb-4 text-center text-xl font-semibold text-slate-900">Nos bureaux</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {siteSettings.bureaus.map((bureau) => (
+                  <article key={bureau.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <h4 className="text-base font-semibold text-slate-900">{bureau.name || "Bureau"}</h4>
+                    <p className="mt-1 text-sm text-slate-600">{bureau.address}</p>
+                    <p className="text-sm text-slate-600">{bureau.phone}</p>
+                    {bureau.email ? <p className="text-sm text-slate-600">{bureau.email}</p> : null}
+                    <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                      <iframe
+                        title={`Carte ${bureau.name || bureau.id}`}
+                        src={`https://www.google.com/maps?q=${encodeURIComponent(bureau.mapQuery || bureau.address || "Tunisie")}&output=embed`}
+                        className="h-48 w-full"
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 

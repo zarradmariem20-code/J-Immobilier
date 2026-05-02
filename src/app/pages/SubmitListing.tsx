@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
 import { LoginModal } from "../components/LoginModal";
+import MapLocationPicker from "../components/MapLocationPicker";
 import { deriveLocationLabel, getCitiesForRegion, tunisiaRegionOptions } from "../data/locations";
 import { supabase } from "../../lib/supabase";
 import { createSubmission, updateSubmissionMedia, uploadAllMedia, uploadVideoFileDirect } from "../../lib/api";
@@ -112,6 +113,8 @@ export function SubmitListing() {
   const [region, setRegion] = useState("");
   const [city, setCity] = useState("");
   const [mapLocationQuery, setMapLocationQuery] = useState("");
+    const [latitude, setLatitude] = useState<number | undefined>(undefined);
+    const [longitude, setLongitude] = useState<number | undefined>(undefined);
   const [nearbyCommodities, setNearbyCommodities] = useState<string[]>([]);
   const [nearbyDetailsInput, setNearbyDetailsInput] = useState("");
   const [propertyType, setPropertyType] = useState("");
@@ -753,28 +756,32 @@ export function SubmitListing() {
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
                     />
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold text-slate-500">Chambres</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={bedrooms}
-                      onChange={(e) => setBedrooms(formatPriceInput(e.target.value))}
-                      placeholder="3"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold text-slate-500">Salles de bain</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={bathrooms}
-                      onChange={(e) => setBathrooms(formatPriceInput(e.target.value))}
-                      placeholder="2"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
-                    />
-                  </div>
+                  {propertyType !== "Terrain" && propertyType !== "Terrain agricole" && (
+                    <>
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-semibold text-slate-500">Chambres</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={bedrooms}
+                          onChange={(e) => setBedrooms(formatPriceInput(e.target.value))}
+                          placeholder="3"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-semibold text-slate-500">Salles de bain</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={bathrooms}
+                          onChange={(e) => setBathrooms(formatPriceInput(e.target.value))}
+                          placeholder="2"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
 
               </div>
@@ -820,26 +827,25 @@ export function SubmitListing() {
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="mb-1.5 block text-[11px] font-semibold text-slate-500">Adresse</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={mapLocationQuery}
-                        onChange={(e) => setMapLocationQuery(e.target.value)}
-                        placeholder="12 Rue de la Republique"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 pr-10 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                    <label className="mb-1.5 block text-[11px] font-semibold text-slate-500">Adresse (optionnel) et carte</label>
+                    <input
+                      type="text"
+                      value={mapLocationQuery}
+                      onChange={(e) => setMapLocationQuery(e.target.value)}
+                      placeholder="12 Rue de la Republique"
+                      className="mb-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 pr-10 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                    />
+                    {!submissionReceipt && (
+                      <MapLocationPicker
+                        latitude={latitude}
+                        longitude={longitude}
+                        onChange={(lat, lng) => {
+                          setLatitude(lat);
+                          setLongitude(lng);
+                          setMapLocationQuery(`${lat},${lng}`);
+                        }}
                       />
-                      <button
-                        type="button"
-                        onClick={handleUseCurrentLocation}
-                        disabled={isLocating}
-                        aria-label="Utiliser ma position"
-                        title={isLocating ? "Localisation en cours..." : "Utiliser ma position"}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-[#1f5f96] transition hover:bg-[#eef5fb] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <LocateFixed className={`h-4 w-4 ${isLocating ? "animate-spin" : ""}`} />
-                      </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>

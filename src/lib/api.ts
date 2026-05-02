@@ -222,10 +222,219 @@ export interface ApprovalSubmissionPayload {
   tags?: string[];
   featured?: boolean;
   supabaseId?: number;
+  // Social media posting options
+  postToFacebook?: boolean;
+  postToInstagram?: boolean;
+  postToTikTok?: boolean;
 }
 
-export async function approveListingWithBackend(submission: ApprovalSubmissionPayload): Promise<number> {
+export interface SocialPostPlatformResult {
+  success: boolean;
+  postId?: string;
+  error?: string;
+}
+
+export interface ApprovalResult {
+  id: number;
+  socialResults: {
+    facebook?: SocialPostPlatformResult;
+    instagram?: SocialPostPlatformResult;
+    tiktok?: SocialPostPlatformResult;
+  };
+}
+
+export interface BureauSettings {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  email?: string;
+  mapQuery: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface SiteSettings {
+  brand: {
+    companyName: string;
+  };
+  contact: {
+    officeAddressLines: string[];
+    officeMapQuery: string;
+    primaryPhone: string;
+    secondaryPhone: string;
+    email: string;
+    openingHours: string[];
+  };
+  bureaus: BureauSettings[];
+  socialLinks: {
+    facebook: string;
+    instagram: string;
+    tiktok: string;
+  };
+  announcementItems: string[];
+}
+
+export interface AdminSettingsResponse {
+  data: SiteSettings;
+  adminEmail: string;
+  hasPassword: boolean;
+  updatedAt: string;
+}
+
+const DEFAULT_SITE_SETTINGS: SiteSettings = {
+  brand: {
+    companyName: "Journal Immobilier",
+  },
+  contact: {
+    officeAddressLines: ["Bouhsina", "Sousse, Tunisie"],
+    officeMapQuery: "Bouhsina Sousse Tunisie",
+    primaryPhone: "+216 97 222 822",
+    secondaryPhone: "+216 27 037 037",
+    email: "contact@journalimmobilier.tn",
+    openingHours: [
+      "Lundi - Vendredi : 8h30 - 18h00",
+      "Samedi : 9h00 - 14h00",
+      "Dimanche : Fermé",
+    ],
+  },
+  bureaus: [
+    {
+      id: "main",
+      name: "Bureau Principal",
+      address: "Bouhsina, Sousse, Tunisie",
+      phone: "+216 97 222 822",
+      email: "contact@journalimmobilier.tn",
+      mapQuery: "Bouhsina Sousse Tunisie",
+      latitude: 35.8256,
+      longitude: 10.6084,
+    },
+  ],
+  socialLinks: {
+    facebook: "https://www.facebook.com/profile.php?id=100054570723975&sk=followers",
+    instagram: "https://www.instagram.com/journal_immobilier?igsh=Mzl3eDE2eHZneGlv",
+    tiktok: "https://www.tiktok.com/@journal_immo2?is_from_webapp=1&sender_device=pc",
+  },
+  announcementItems: [
+    "Nous publions votre bien sur Facebook, Instagram et TikTok",
+    "Marketing réseaux sociaux 100% gratuit pour votre annonce",
+    "Visibilité renforcée dès la mise en ligne",
+  ],
+};
+
+let publicSettingsCache: { at: number; data: SiteSettings } | null = null;
+
+export async function getPublicSiteSettings(forceRefresh = false): Promise<SiteSettings> {
+  if (!forceRefresh && publicSettingsCache && isFresh(publicSettingsCache.at, 60_000)) {
+    return publicSettingsCache.data;
+  }
+
+  const response = await withTimeout(
+    fetch(`${BACKEND_BASE_URL}/api/settings`),
+    8_000,
+    "Le chargement des paramètres publics a expiré.",
+  );
+
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok || !payload?.data) {
+    return DEFAULT_SITE_SETTINGS;
+  }
+
+  publicSettingsCache = { at: Date.now(), data: payload.data as SiteSettings };
+  return payload.data as SiteSettings;
+}
+
+export async function getAdminSettings(): Promise<AdminSettingsResponse> {
+  const response = await withTimeout(
+    fetch(`${BACKEND_BASE_URL}/api/admin/settings`),
+    10_000,
+    "Le chargement des paramètres admin a expiré.",
+  );
+
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.error || "Impossible de charger les paramètres admin.");
+  }
+
+  return {
+    data: payload.data as SiteSettings,
+    adminEmail: typeof payload.adminEmail === "string" ? payload.adminEmail : payload.data.contact?.email ?? "",
+    hasPassword: Boolean(payload.hasPassword),
+    updatedAt: typeof payload.updatedAt === "string" ? payload.updatedAt : new Date().toISOString(),
+  };
+}
+
+export async function saveAdminSettings(data: SiteSettings, adminEmail: string): Promise<AdminSettingsResponse> {
+  const response = await withTimeout(
+    fetch(`${BACKEND_BASE_URL}/api/admin/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data, adminEmail }),
+    }),
+    12_000,
+    "L'enregistrement des paramètres admin a expiré.",
+  );
+
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.error || "Impossible d'enregistrer les paramètres admin.");
+  }
+
+  publicSettingsCache = { at: Date.now(), data: payload.data as SiteSettings };
+
+  return {
+    data: payload.data as SiteSettings,
+    adminEmail: typeof payload.adminEmail === "string" ? payload.adminEmail : adminEmail,
+    hasPassword: true,
+    updatedAt: typeof payload.updatedAt === "string" ? payload.updatedAt : new Date().toISOString(),
+  };
+}
+
+export async function updateAdminPassword(currentPassword: string, newPassword: string): Promise<void> {
+  const response = await withTimeout(
+    fetch(`${BACKEND_BASE_URL}/api/admin/settings/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+    12_000,
+    "La mise à jour du mot de passe admin a expiré.",
+  );
+
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.error || "Impossible de changer le mot de passe admin.");
+  }
+}
+
+export async function approveListingWithBackend(submission: ApprovalSubmissionPayload): Promise<ApprovalResult> {
   let response: Response;
+
+  const { postToFacebook, postToInstagram, postToTikTok, ...submissionFields } = submission;
 
   try {
     response = await withTimeout(
@@ -234,7 +443,12 @@ export async function approveListingWithBackend(submission: ApprovalSubmissionPa
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ submission }),
+        body: JSON.stringify({
+          submission: submissionFields,
+          postToFacebook: postToFacebook ?? false,
+          postToInstagram: postToInstagram ?? false,
+          postToTikTok: postToTikTok ?? false,
+        }),
       }),
       20_000,
       "La synchronisation Supabase de l'annonce a expiré."
@@ -265,7 +479,7 @@ export async function approveListingWithBackend(submission: ApprovalSubmissionPa
 
   clearListingsCache();
   emitPropertiesChanged();
-  return payload.id;
+  return { id: payload.id, socialResults: payload.socialResults ?? {} };
 }
 
 export async function inactivateListingWithBackend(supabaseId: number): Promise<number> {

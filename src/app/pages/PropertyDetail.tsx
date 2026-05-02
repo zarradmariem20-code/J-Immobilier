@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
@@ -115,6 +115,7 @@ export function PropertyDetail() {
   const [successPulse, setSuccessPulse] = useState(false);
   const [isActiveVideoBroken, setIsActiveVideoBroken] = useState(false);
   const [activeVideoAspectRatio, setActiveVideoAspectRatio] = useState<number | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
   const activeMedia = mediaItems[activeMediaIndex] ?? { kind: "image", src: "" };
   const isPlayableActiveVideo = activeMedia.kind === "video" && Boolean(activeMedia.src) && !isActiveVideoBroken;
 
@@ -381,6 +382,36 @@ export function PropertyDetail() {
     setActiveMediaIndex(nextIndex);
   };
 
+  const handleMediaTouchStart = (event: React.TouchEvent<HTMLElement>) => {
+    if (!isMobile || mediaItems.length <= 1) {
+      return;
+    }
+
+    touchStartXRef.current = event.touches[0]?.clientX ?? null;
+  };
+
+  const handleMediaTouchEnd = (event: React.TouchEvent<HTMLElement>) => {
+    if (!isMobile || mediaItems.length <= 1 || touchStartXRef.current === null) {
+      touchStartXRef.current = null;
+      return;
+    }
+
+    const touchEndX = event.changedTouches[0]?.clientX ?? touchStartXRef.current;
+    const deltaX = touchStartXRef.current - touchEndX;
+    touchStartXRef.current = null;
+
+    if (Math.abs(deltaX) < 40) {
+      return;
+    }
+
+    if (deltaX > 0) {
+      handleNextImage();
+      return;
+    }
+
+    handlePrevImage();
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -492,7 +523,7 @@ export function PropertyDetail() {
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.65fr_0.95fr]">
             <div className="rounded-[24px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] p-3 sm:rounded-[28px] sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
               <div className="flex items-center gap-2 sm:gap-3">
-                {mediaItems.length > 1 && (
+                {mediaItems.length > 1 && !isMobile && (
                   <button
                     type="button"
                     onClick={handlePrevImage}
@@ -504,8 +535,10 @@ export function PropertyDetail() {
                 )}
 
                 <div
-                  className={`relative min-w-0 flex-1 overflow-hidden rounded-[18px] border border-slate-200/40 ${isPlayableActiveVideo ? "mx-auto w-full max-w-[360px] bg-slate-950 sm:max-w-[420px] md:max-w-[520px]" : "h-[240px] bg-white sm:h-[380px] md:h-[480px]"}`}
+                  className={`relative min-w-0 flex-1 overflow-hidden rounded-[18px] border border-slate-200/40 ${isPlayableActiveVideo ? "w-full bg-slate-950 sm:mx-auto sm:max-w-[420px] md:max-w-[520px]" : "h-[240px] bg-white sm:h-[380px] md:h-[480px]"}`}
                   style={isPlayableActiveVideo ? { aspectRatio: activeVideoAspectRatio ?? "9 / 16" } : undefined}
+                  onTouchStart={handleMediaTouchStart}
+                  onTouchEnd={handleMediaTouchEnd}
                 >
                   {activeMedia.kind === "image" && activeMedia.src ? (
                     <ImageWithFallback
@@ -557,7 +590,7 @@ export function PropertyDetail() {
                   )}
                 </div>
 
-                {mediaItems.length > 1 && (
+                {mediaItems.length > 1 && !isMobile && (
                   <button
                     type="button"
                     onClick={handleNextImage}
@@ -1000,28 +1033,34 @@ export function PropertyDetail() {
               <X className="h-6 w-6" />
             </button>
 
-            <button
-              type="button"
-              onClick={handlePrevImage}
-              className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white transition hover:bg-white/30 backdrop-blur-sm md:left-6"
-              aria-label="Image précédente"
-            >
-              <ChevronLeft className="h-8 w-8" />
-            </button>
+            {!isMobile && (
+              <button
+                type="button"
+                onClick={handlePrevImage}
+                className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white transition hover:bg-white/30 backdrop-blur-sm md:left-6"
+                aria-label="Image précédente"
+              >
+                <ChevronLeft className="h-8 w-8" />
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={handleNextImage}
-              className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white transition hover:bg-white/30 backdrop-blur-sm md:right-6"
-              aria-label="Image suivante"
-            >
-              <ChevronRight className="h-8 w-8" />
-            </button>
+            {!isMobile && (
+              <button
+                type="button"
+                onClick={handleNextImage}
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white transition hover:bg-white/30 backdrop-blur-sm md:right-6"
+                aria-label="Image suivante"
+              >
+                <ChevronRight className="h-8 w-8" />
+              </button>
+            )}
 
             <ImageWithFallback
               src={activeMedia.src}
               alt={property?.title || "Image en plein écran"}
               className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+              onTouchStart={handleMediaTouchStart}
+              onTouchEnd={handleMediaTouchEnd}
             />
           </div>
         </div>

@@ -1,12 +1,11 @@
 ﻿import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowRight, Award, BadgeDollarSign, Bookmark, ChevronDown, Clapperboard, Heart, Home as HomeIcon, Images, KeyRound, MessageCircle, Play, Search, Send, TrendingUp } from "lucide-react";
+import { ArrowRight, Award, BadgeDollarSign, ChevronDown, Heart, Home as HomeIcon, Images, KeyRound, MessageCircle, Search, TrendingUp } from "lucide-react";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
 import { PropertyCard } from "../components/PropertyCard";
 import { getCitiesForRegion, tunisiaRegionOptions } from "../data/locations";
 import editorialImageTwo from "../../assets/image1.jpeg";
-import socialPreviewImage from "../../assets/image2.jpg";
 import ownerHeroImage from "../../assets/image.png";
 import brandWordmark from "../../assets/tawla2.png";
 import facebookLogo from "../../assets/Facebook_Logo.png";
@@ -120,24 +119,6 @@ export function Home() {
       detail: { mode: "login", redirectTo: "/submit-listing" },
     }));
   };
-
-  const socialShowcaseLinks = [
-    {
-      label: "Facebook",
-      href: "https://www.facebook.com/profile.php?id=100054570723975&sk=followers",
-      logoSrc: facebookLogo,
-    },
-    {
-      label: "Instagram",
-      href: "https://www.instagram.com/journal_immobilier?igsh=Mzl3eDE2eHZneGlv",
-      logoSrc: instagramLogo,
-    },
-    {
-      label: "TikTok",
-      href: "https://www.tiktok.com/@journal_immo2?is_from_webapp=1&sender_device=pc",
-      logoSrc: tiktokLogo,
-    },
-  ];
 
   return (
     <div
@@ -315,141 +296,103 @@ export function Home() {
         </div>
       </section>
 
-      <section className="py-18">
+      <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative overflow-hidden rounded-[34px] border border-sky-100/80 bg-[linear-gradient(135deg,#f8fbff_0%,#eef7ff_42%,#fdfefe_100%)] px-5 py-6 shadow-[0_28px_80px_rgba(15,23,42,0.12)] sm:px-7 sm:py-8 lg:px-8 lg:py-9">
-            <div className="absolute -left-16 top-0 h-56 w-56 rounded-full bg-sky-200/35 blur-3xl" />
-            <div className="absolute -right-12 bottom-0 h-52 w-52 rounded-full bg-cyan-200/25 blur-3xl" />
-            <div className="relative grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-              <div className="order-2 max-w-xl lg:order-1">
-                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-700">Diffusion réseaux sociaux</p>
-                <h2 className="mt-3 font-serif text-[32px] font-semibold leading-[1.02] text-slate-950 sm:text-[40px]">
-                  Une annonce pensée pour le site, puis adaptée aux réseaux.
-                </h2>
-                <p className="mt-5 text-[15px] leading-7 text-slate-600 sm:text-base">
-                  Photos, vidéos et accroches retravaillées pour donner plus de visibilité à votre bien.
-                </p>
-                <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-[20px] border border-white/70 bg-white/80 px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-                    <Clapperboard className="h-4 w-4 text-sky-700" />
-                    <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">Contenu</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">Photos fortes et formats courts.</p>
-                  </div>
-                  <div className="rounded-[20px] border border-white/70 bg-white/80 px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-                    <TrendingUp className="h-4 w-4 text-sky-700" />
-                    <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">Ciblage</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">Pensé pour le mobile et le scroll rapide.</p>
-                  </div>
-                  <div className="rounded-[20px] border border-white/70 bg-white/80 px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-                    <Images className="h-4 w-4 text-sky-700" />
-                    <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">Image</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">Une présentation plus premium dès le départ.</p>
-                  </div>
-                </div>
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={openAddListingFlow}
-                    className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-3 font-semibold text-white transition hover:bg-slate-800"
-                  >
-                    Confier mon annonce
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                  <Link
-                    to="/contact"
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white/80 px-5 py-3 font-semibold text-slate-900 transition hover:border-sky-200 hover:text-sky-700"
-                  >
-                    Parler à l'équipe
-                  </Link>
-                </div>
-              </div>
+          <div className="relative overflow-hidden rounded-[36px] bg-[linear-gradient(135deg,#0c1628_0%,#0f2645_55%,#0c1628_100%)] px-6 py-14 shadow-[0_32px_90px_rgba(10,20,50,0.38)] sm:px-10 sm:py-16 lg:px-14 lg:py-18">
+            {/* Glow accents */}
+            <div className="pointer-events-none absolute -left-24 top-0 h-80 w-80 rounded-full bg-sky-600/20 blur-[80px]" />
+            <div className="pointer-events-none absolute -right-24 bottom-0 h-72 w-72 rounded-full bg-blue-500/15 blur-[80px]" />
+            <div className="pointer-events-none absolute left-1/2 top-0 h-48 w-48 -translate-x-1/2 rounded-full bg-sky-400/10 blur-[60px]" />
 
-              <div className="order-1 relative min-h-[520px] sm:min-h-[620px] lg:order-2 lg:min-h-[620px]">
-                <div className="social-showcase-phone social-showcase-glow relative z-20 mx-auto w-[min(100%,340px)] overflow-hidden rounded-[34px] border border-slate-200/70 bg-white p-3 shadow-[0_30px_80px_rgba(15,23,42,0.24)] lg:absolute lg:right-[90px] lg:top-3">
-                  <div className="flex items-center justify-between px-1 pb-3 pt-1">
+            {/* Header */}
+            <div className="relative mx-auto max-w-2xl text-center">
+              <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.28em] text-sky-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                Comment ça marche
+              </span>
+              <h2 className="mt-5 font-serif text-[clamp(1.9rem,4.5vw,3.2rem)] font-semibold leading-[1.06] tracking-[-0.02em] text-white">
+                De la mise en ligne à la vente,<br className="hidden sm:block" /> on vous accompagne.
+              </h2>
+              <p className="mt-4 text-[15px] leading-7 text-slate-400">
+                Un processus simple, transparent et efficace pour valoriser votre bien.
+              </p>
+            </div>
+
+            {/* Steps */}
+            <div className="relative mt-12 grid gap-4 sm:grid-cols-3">
+              {/* Connector line on desktop */}
+              <div className="pointer-events-none absolute left-[calc(16.67%+12px)] right-[calc(16.67%+12px)] top-8 hidden h-px sm:block"
+                style={{ background: "linear-gradient(90deg, transparent, rgba(56,189,248,0.4) 20%, rgba(56,189,248,0.4) 80%, transparent)" }} />
+
+              {[
+                {
+                  num: "01",
+                  icon: Images,
+                  title: "Déposez votre annonce",
+                  desc: "Photos, vidéo, description — en quelques minutes depuis votre téléphone ou ordinateur.",
+                },
+                {
+                  num: "02",
+                  icon: Award,
+                  title: "Validation par notre équipe",
+                  desc: "Chaque annonce est examinée avant publication pour garantir la qualité du catalogue.",
+                },
+                {
+                  num: "03",
+                  icon: TrendingUp,
+                  title: "Mise en ligne & visibilité",
+                  desc: "Votre bien est publié et mis en avant auprès des acheteurs et locataires actifs.",
+                },
+              ].map((step) => {
+                const Icon = step.icon;
+                return (
+                  <div
+                    key={step.num}
+                    className="relative rounded-[26px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm transition hover:border-sky-500/30 hover:bg-white/8"
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[linear-gradient(135deg,#0f172a_0%,#0f3d63_64%,#0ea5e9_100%)] p-2.5 shadow-[0_10px_24px_rgba(14,165,233,0.28)]">
-                        <img src={brandWordmark} alt="Journal Immobilier" className="h-full w-full object-contain" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-950">journal_immobilier</p>
-                        <p className="text-xs text-slate-500">Publication sponsorisée</p>
+                      <span className="font-black text-[2.4rem] leading-none text-sky-500/25">{step.num}</span>
+                      <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-300">
+                        <Icon className="h-5 w-5" />
                       </div>
                     </div>
-                    <div className="rounded-full bg-slate-950 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white">
-                      Reel
-                    </div>
+                    <h3 className="mt-4 text-base font-semibold text-white sm:text-lg">{step.title}</h3>
+                    <p className="mt-2 text-sm leading-7 text-slate-400">{step.desc}</p>
                   </div>
+                );
+              })}
+            </div>
 
-                  <div className="relative overflow-hidden rounded-[26px] bg-slate-950">
-                    <img
-                      src={socialPreviewImage}
-                      alt="Aperçu de diffusion immobilière sur les réseaux sociaux"
-                      className="h-[400px] w-full object-cover sm:h-[470px]"
-                    />
-                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.04)_0%,rgba(2,6,23,0.08)_42%,rgba(2,6,23,0.78)_100%)]" />
-                    <div className="absolute left-4 right-4 top-4 flex items-start justify-between">
-                      <div className="rounded-full border border-white/20 bg-black/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-sm">
-                        Villa moderne
-                      </div>
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white backdrop-blur-sm">
-                        <Play className="h-4 w-4 fill-current" />
-                      </div>
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-200">Sousse • Visuel premium</p>
-                      <h3 className="mt-2 max-w-[16rem] text-2xl font-semibold leading-tight text-white sm:text-[28px]">
-                        Un visuel qui arrête le scroll.
-                      </h3>
-                      <p className="mt-2 max-w-[17rem] text-sm leading-6 text-slate-200">
-                        Hero photo et formats courts pour les réseaux.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between px-1 pb-1 pt-3">
-                    <div className="flex items-center gap-4 text-slate-800">
-                      <Heart className="h-5 w-5 fill-current text-rose-500" />
-                      <MessageCircle className="h-5 w-5" />
-                      <Send className="h-5 w-5" />
-                    </div>
-                    <Bookmark className="h-5 w-5 text-slate-800" />
-                  </div>
-                  <div className="px-1 pb-2">
-                    <p className="text-sm font-semibold text-slate-950">Visibilité multi-plateforme</p>
-                    <p className="mt-1 line-clamp-1 whitespace-nowrap text-sm leading-6 text-slate-600">
-                      Reels et stories pour mieux valoriser le bien.
-                    </p>
-                  </div>
+            {/* Stats row */}
+            <div className="relative mt-10 grid grid-cols-3 gap-4 rounded-[22px] border border-white/8 bg-white/5 px-6 py-5 backdrop-blur-sm sm:gap-6">
+              {[
+                { value: "100%", label: "Gratuit pour les vendeurs" },
+                { value: "3 étapes", label: "Pour publier votre bien" },
+                { value: "24h", label: "Délai de validation moyen" },
+              ].map((stat) => (
+                <div key={stat.label} className="text-center">
+                  <p className="text-xl font-black text-white sm:text-2xl lg:text-3xl">{stat.value}</p>
+                  <p className="mt-1 text-[11px] leading-4 text-slate-400 sm:text-xs">{stat.label}</p>
                 </div>
+              ))}
+            </div>
 
-                <div className="social-showcase-drift absolute left-0 top-10 z-10 w-[170px] rounded-[22px] bg-slate-950 p-3 text-white shadow-[0_24px_60px_rgba(15,23,42,0.24)] sm:top-8 sm:w-[230px] sm:rounded-[26px] sm:p-4 lg:left-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-300">Formats diffusés</p>
-                  <div className="mt-3 space-y-2">
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-100 sm:py-2.5 sm:text-sm">Story verticale</div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-100 sm:py-2.5 sm:text-sm">Reel vidéo court</div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-100 sm:py-2.5 sm:text-sm">Post carrousel</div>
-                  </div>
-                </div>
-
-                <div className="social-showcase-float absolute bottom-5 right-0 z-30 w-[190px] rounded-[20px] border border-sky-100 bg-white/92 p-3 shadow-[0_20px_45px_rgba(15,23,42,0.14)] backdrop-blur-sm sm:bottom-6 sm:right-6 sm:w-[260px] sm:rounded-[24px] sm:p-4 lg:right-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Canaux activés</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {socialShowcaseLinks.map((item) => (
-                      <span
-                        key={item.label}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-sky-100 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-slate-800 sm:px-3 sm:py-1.5 sm:text-sm"
-                      >
-                        <img src={item.logoSrc} alt={item.label} className="h-4 w-4 rounded-full object-cover" />
-                        {item.label}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-xs leading-5 text-slate-600 sm:text-sm sm:leading-6">
-                    Un rendu plus graphique avant le premier message.
-                  </p>
-                </div>
-              </div>
+            {/* CTA */}
+            <div className="relative mt-8 flex flex-wrap justify-center gap-3">
+              <button
+                type="button"
+                onClick={openAddListingFlow}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-semibold text-slate-950 shadow-[0_8px_24px_rgba(255,255,255,0.14)] transition hover:bg-sky-50"
+              >
+                Publier mon bien
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              <Link
+                to="/contact"
+                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/8 px-6 py-3 font-semibold text-white backdrop-blur-sm transition hover:border-white/40"
+              >
+                Nous contacter
+              </Link>
             </div>
           </div>
         </div>

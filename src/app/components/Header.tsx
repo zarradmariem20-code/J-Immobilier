@@ -6,6 +6,14 @@ import { BrandLogo } from "./BrandLogo";
 import { LoginModal } from "./LoginModal.tsx";
 import { clearAuthSession } from "../utils/storage";
 import { supabase } from "../../lib/supabase";
+import { getPublicSiteSettings } from "../../lib/api";
+import facebookLogo from "../../assets/Facebook_Logo.png";
+import instagramLogo from "../../assets/insta.avif";
+import tiktokLogo from "../../assets/tiktok-.webp";
+
+// Module-level cache so re-mounting Header on navigation never flashes
+let _cachedUser: any = null;
+let _authInitialized = false;
 
 export function Header() {
   const location = useLocation();
@@ -14,14 +22,27 @@ export function Header() {
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"login">("login");
   const [isScrolled, setIsScrolled] = useState(false);
-  const [authProfile, setAuthProfile] = useState<any>(null);
+  const [authProfile, setAuthProfile] = useState<any>(() => _cachedUser);
+  const [authReady, setAuthReady] = useState(() => _authInitialized);
   const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const [announcementItems, setAnnouncementItems] = useState<string[]>([
+    "Nous publions votre bien sur Facebook, Instagram et TikTok",
+    "Marketing réseaux sociaux 100% gratuit pour votre annonce",
+    "Visibilité renforcée dès la mise en ligne",
+  ]);
+
+  useEffect(() => {
+    getPublicSiteSettings().then((s) => {
+      if (s.announcementItems?.length) setAnnouncementItems(s.announcementItems);
+    }).catch(() => {});
+  }, []);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     clearAuthSession();
+    _cachedUser = null;
     setAuthProfile(null);
     navigate("/");
   };
@@ -74,27 +95,39 @@ export function Header() {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setAuthProfile(user);
-      // If just logged in via modal and a redirect is pending, just close modal and clear redirect (no navigation)
-      if (user && pendingRedirect) {
-        setPendingRedirect(null);
-        setLoginModalOpen(false);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        _cachedUser = user;
+        _authInitialized = true;
+        setAuthProfile(user);
+        // If just logged in via modal and a redirect is pending, just close modal and clear redirect (no navigation)
+        if (user && pendingRedirect) {
+          setPendingRedirect(null);
+          setLoginModalOpen(false);
+        }
+      } finally {
+        _authInitialized = true;
+        setAuthReady(true);
       }
     };
+
     fetchUser();
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       const user = session?.user ?? null;
+      _cachedUser = user;
+      _authInitialized = true;
       setAuthProfile(user);
+      setAuthReady(true);
       if (user && pendingRedirect) {
         setPendingRedirect(null);
         setLoginModalOpen(false);
       }
     });
+
     return () => {
       listener.subscription.unsubscribe();
     };
-  }, [pendingRedirect, navigate]);
+  }, [pendingRedirect]);
 
   // Removed effect that auto-navigates after login. Now, after login, user stays on the same screen.
 
@@ -136,13 +169,75 @@ export function Header() {
 
   return (
     <>
-      <header
-        className={`sticky top-0 z-50 border-b border-slate-200 border-t-2 border-t-[#1f5f96] bg-white/95 backdrop-blur-xl transition-all duration-300 ${
-          isScrolled ? "shadow-[0_8px_30px_rgba(15,23,42,0.08)]" : "shadow-none"
-        }`}
-      >
+      <style>{`
+        @keyframes headerAnnouncementLoop {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        @keyframes headerBarShimmer {
+          0% { background-position: -400px 0; }
+          100% { background-position: 400px 0; }
+        }
+      `}</style>
+      <div className="sticky top-0 z-50">
+        {/* Announcement bar */}
+        <section
+          className="relative overflow-hidden border-b border-white/10 py-2"
+          style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)" }}
+        >
+          <div
+            className="pointer-events-none absolute inset-0 opacity-20"
+            style={{
+              background: "linear-gradient(105deg, transparent 30%, rgba(99,179,237,0.45) 50%, transparent 70%)",
+              backgroundSize: "800px 100%",
+              animation: "headerBarShimmer 4s linear infinite",
+            }}
+          />
+          <div className="overflow-hidden">
+            <div className="flex w-max whitespace-nowrap">
+              {[0, 1].map((trackIdx) => (
+                <div
+                  key={trackIdx}
+                  className="flex shrink-0 items-center"
+                  style={{ animation: "headerAnnouncementLoop 28s linear infinite" }}
+                  aria-hidden={trackIdx === 1 ? "true" : undefined}
+                >
+                  {announcementItems.map((message, index) => (
+                    <span
+                      key={`${trackIdx}-${index}`}
+                      className="inline-flex items-center gap-2.5 px-6 text-[11px] font-bold uppercase tracking-[0.12em] text-white sm:text-[11.5px]"
+                    >
+                      {index === 0 && (
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          <img src={facebookLogo} alt="" className="h-3 w-3 rounded-sm object-cover sm:h-3.5 sm:w-3.5" />
+                          <img src={instagramLogo} alt="" className="h-3 w-3 rounded-sm object-cover sm:h-3.5 sm:w-3.5" />
+                          <img src={tiktokLogo} alt="" className="h-3 w-3 rounded-sm object-cover sm:h-3.5 sm:w-3.5" />
+                        </span>
+                      )}
+                      {index !== 0 && (
+                        <span
+                          className="inline-block h-1 w-1 rounded-full"
+                          style={{ background: "linear-gradient(135deg, #38bdf8, #818cf8)" }}
+                        />
+                      )}
+                      <span style={{ background: "linear-gradient(90deg, #e2e8f0, #bae6fd, #e2e8f0)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                        {message}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <header
+          className={`border-b border-slate-200 border-t-2 border-t-[#1f5f96] bg-white/95 backdrop-blur-xl transition-all duration-300 ${
+            isScrolled ? "shadow-[0_8px_30px_rgba(15,23,42,0.08)]" : "shadow-none"
+          }`}
+        >
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
-          <div className="flex min-h-[74px] items-center gap-3 sm:min-h-[92px] sm:gap-6">
+          <div className="flex min-h-[60px] items-center gap-3 sm:min-h-[72px] sm:gap-6">
             <div className="min-w-0 flex-shrink">
               <BrandLogo compact={false} />
             </div>
@@ -174,8 +269,8 @@ export function Header() {
                   );
                 })}
 
-                {authProfile ? (
-                <div className="relative ml-10" ref={userMenuRef}>
+                {authReady ? (authProfile ? (
+                  <div className="relative ml-10" ref={userMenuRef}>
                   <button
                     type="button"
                     onClick={() => setUserMenuOpen((prev) => !prev)}
@@ -240,6 +335,8 @@ export function Header() {
                   <UserRound className="h-4 w-4 text-[#1f5f96]" />
                   Se connecter
                 </button>
+              )) : (
+                <div className="ml-10 h-8 w-[124px]" aria-hidden="true" />
               )}
               </nav>
             </div>
@@ -287,7 +384,7 @@ export function Header() {
                 Ajouter mon annonce
               </button>
 
-              {authProfile ? (
+              {authReady ? (authProfile ? (
                 <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
                   <div className="mb-3 flex items-center gap-2">
                     <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-sm font-bold text-white">
@@ -340,11 +437,14 @@ export function Header() {
                   <UserRound className="h-4 w-4" />
                   Se connecter
                 </button>
+              )) : (
+                <div className="mt-3 h-11 w-full rounded-2xl border border-transparent" aria-hidden="true" />
               )}
             </nav>
           </div>
         )}
       </header>
+      </div>
       <LoginModal
         isOpen={loginModalOpen}
         initialMode={modalMode}
