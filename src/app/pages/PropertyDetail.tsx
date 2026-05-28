@@ -424,18 +424,48 @@ export function PropertyDetail() {
     const el = mediaContainerRef.current;
     if (!el || !isMobile || mediaItems.length <= 1) return;
 
-    const onTouchMove = (e: TouchEvent) => {
-      e.preventDefault();
+    let startX = 0;
+    let startY = 0;
+    let locked = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      startX = e.touches[0]?.clientX ?? 0;
+      startY = e.touches[0]?.clientY ?? 0;
+      locked = false;
     };
 
+    const onTouchMove = (e: TouchEvent) => {
+      if (locked) return;
+      const dx = Math.abs((e.touches[0]?.clientX ?? 0) - startX);
+      const dy = Math.abs((e.touches[0]?.clientY ?? 0) - startY);
+      if (dy > dx && dy > 5) {
+        locked = true;
+      }
+      if (!locked) {
+        e.preventDefault();
+      }
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
     el.addEventListener("touchmove", onTouchMove, { passive: false });
 
     return () => {
+      el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchmove", onTouchMove);
     };
   }, [isMobile, mediaItems.length]);
 
   useEffect(() => {
+    const current = mediaItems[activeMediaIndex];
+    if (current?.kind === "image" && current.src) {
+      const img = new Image();
+      img.onload = () => setActiveImageLoaded(true);
+      img.src = current.src;
+      if (img.complete) {
+        setActiveImageLoaded(true);
+      }
+    }
+
     if (mediaItems.length <= 1) return;
     const preloadIndices = [
       (activeMediaIndex + 1) % mediaItems.length,
@@ -574,7 +604,7 @@ export function PropertyDetail() {
 
                 <div
                   ref={mediaContainerRef}
-                  className={`relative min-w-0 flex-1 overflow-hidden rounded-[18px] border border-slate-200/40 ${isPlayableActiveVideo ? "w-full bg-slate-950 sm:mx-auto sm:max-w-[420px] md:max-w-[520px]" : "h-[240px] bg-white sm:h-[380px] md:h-[480px]"}`}
+                  className={`relative min-w-0 flex-1 overflow-hidden rounded-[18px] border border-slate-200/40 ${isPlayableActiveVideo ? "w-full bg-slate-950 sm:mx-auto sm:max-w-[420px] md:max-w-[520px]" : "h-[240px] bg-slate-50 sm:h-[380px] md:h-[480px]"}`}
                   style={isPlayableActiveVideo ? { aspectRatio: activeVideoAspectRatio ?? "9 / 16" } : undefined}
                   onTouchStart={handleMediaTouchStart}
                   onTouchEnd={handleMediaTouchEnd}
@@ -582,7 +612,7 @@ export function PropertyDetail() {
                   {activeMedia.kind === "image" && activeMedia.src ? (
                     <>
                       {!activeImageLoaded && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-50 animate-pulse rounded-[18px]">
+                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-50 animate-pulse rounded-[18px]">
                           <svg className="h-10 w-10 text-slate-300 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -592,7 +622,7 @@ export function PropertyDetail() {
                       <img
                         src={activeMedia.src}
                         alt={property.title}
-                        className={`h-full w-full object-cover transition-opacity duration-150 ${activeImageLoaded ? "opacity-100" : "opacity-0"}`}
+                        className={`h-full w-full object-cover ${activeImageLoaded ? "opacity-100" : "opacity-0"}`}
                         onLoad={() => setActiveImageLoaded(true)}
                       />
                     </>
@@ -658,7 +688,7 @@ export function PropertyDetail() {
                     <button
                       key={`${item.kind}-${item.src}-${index}`}
                       type="button"
-                      onClick={() => setActiveMediaIndex(index)}
+                      onClick={() => { setActiveImageLoaded(false); setActiveMediaIndex(index); }}
                       className={`h-16 w-24 shrink-0 overflow-hidden rounded-[12px] border transition-all duration-200 ${
                         activeMediaIndex === index ? "border-sky-400 ring-2 ring-sky-300/40 shadow-lg" : "border-slate-300 hover:border-slate-400 hover:shadow-md"
                       }`}
@@ -1110,7 +1140,6 @@ export function PropertyDetail() {
               alt={property?.title || "Image en plein écran"}
               className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
               onTouchStart={handleMediaTouchStart}
-              onTouchMove={(e) => { if (isMobile && mediaItems.length > 1) e.preventDefault(); }}
               onTouchEnd={handleMediaTouchEnd}
             />
           </div>
