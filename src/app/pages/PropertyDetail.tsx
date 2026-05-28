@@ -113,7 +113,9 @@ export function PropertyDetail() {
   const [successPulse, setSuccessPulse] = useState(false);
   const [isActiveVideoBroken, setIsActiveVideoBroken] = useState(false);
   const [activeVideoAspectRatio, setActiveVideoAspectRatio] = useState<number | null>(null);
+  const [activeImageLoaded, setActiveImageLoaded] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
+  const mediaContainerRef = useRef<HTMLDivElement | null>(null);
   const activeMedia = mediaItems[activeMediaIndex] ?? { kind: "image", src: "" };
   const isPlayableActiveVideo = activeMedia.kind === "video" && Boolean(activeMedia.src) && !isActiveVideoBroken;
   const companySocialLinks = useMemo(() => {
@@ -369,6 +371,7 @@ export function PropertyDetail() {
 
     const currentIndex = activeMediaIndex >= 0 ? activeMediaIndex : 0;
     const nextIndex = (currentIndex - 1 + mediaItems.length) % mediaItems.length;
+    setActiveImageLoaded(false);
     setActiveMediaIndex(nextIndex);
   };
 
@@ -383,6 +386,7 @@ export function PropertyDetail() {
 
     const currentIndex = activeMediaIndex >= 0 ? activeMediaIndex : 0;
     const nextIndex = (currentIndex + 1) % mediaItems.length;
+    setActiveImageLoaded(false);
     setActiveMediaIndex(nextIndex);
   };
 
@@ -415,6 +419,36 @@ export function PropertyDetail() {
 
     handlePrevImage();
   };
+
+  useEffect(() => {
+    const el = mediaContainerRef.current;
+    if (!el || !isMobile || mediaItems.length <= 1) return;
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+    };
+
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+
+    return () => {
+      el.removeEventListener("touchmove", onTouchMove);
+    };
+  }, [isMobile, mediaItems.length]);
+
+  useEffect(() => {
+    if (mediaItems.length <= 1) return;
+    const preloadIndices = [
+      (activeMediaIndex + 1) % mediaItems.length,
+      (activeMediaIndex - 1 + mediaItems.length) % mediaItems.length,
+    ];
+    preloadIndices.forEach((idx) => {
+      const item = mediaItems[idx];
+      if (item.kind === "image" && item.src) {
+        const img = new Image();
+        img.src = item.src;
+      }
+    });
+  }, [activeMediaIndex, mediaItems]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -524,8 +558,8 @@ export function PropertyDetail() {
             <span className="max-w-[280px] truncate">{property.title}</span>
           </div>
 
-          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.65fr_0.95fr]">
-            <div className="rounded-[24px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] p-3 sm:rounded-[28px] sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.65fr_0.95fr] overflow-hidden">
+            <div className="rounded-[24px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] p-3 sm:rounded-[28px] sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)] overflow-hidden min-w-0">
               <div className="flex items-center gap-2 sm:gap-3">
                 {mediaItems.length > 1 && !isMobile && (
                   <button
@@ -539,17 +573,29 @@ export function PropertyDetail() {
                 )}
 
                 <div
+                  ref={mediaContainerRef}
                   className={`relative min-w-0 flex-1 overflow-hidden rounded-[18px] border border-slate-200/40 ${isPlayableActiveVideo ? "w-full bg-slate-950 sm:mx-auto sm:max-w-[420px] md:max-w-[520px]" : "h-[240px] bg-white sm:h-[380px] md:h-[480px]"}`}
                   style={isPlayableActiveVideo ? { aspectRatio: activeVideoAspectRatio ?? "9 / 16" } : undefined}
                   onTouchStart={handleMediaTouchStart}
                   onTouchEnd={handleMediaTouchEnd}
                 >
                   {activeMedia.kind === "image" && activeMedia.src ? (
-                    <ImageWithFallback
-                      src={activeMedia.src}
-                      alt={property.title}
-                      className="h-full w-full object-cover"
-                    />
+                    <>
+                      {!activeImageLoaded && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-50 animate-pulse rounded-[18px]">
+                          <svg className="h-10 w-10 text-slate-300 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                        </div>
+                      )}
+                      <img
+                        src={activeMedia.src}
+                        alt={property.title}
+                        className={`h-full w-full object-cover transition-opacity duration-150 ${activeImageLoaded ? "opacity-100" : "opacity-0"}`}
+                        onLoad={() => setActiveImageLoaded(true)}
+                      />
+                    </>
                   ) : isPlayableActiveVideo ? (
                     <VideoPlayer
                       src={activeMedia.src}
@@ -640,7 +686,7 @@ export function PropertyDetail() {
               )}
             </div>
 
-            <div className="space-y-3 lg:sticky lg:top-24 lg:self-start lg:space-y-4">
+            <div className="space-y-3 lg:sticky lg:top-24 lg:self-start lg:space-y-4 min-w-0">
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
@@ -1064,6 +1110,7 @@ export function PropertyDetail() {
               alt={property?.title || "Image en plein écran"}
               className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
               onTouchStart={handleMediaTouchStart}
+              onTouchMove={(e) => { if (isMobile && mediaItems.length > 1) e.preventDefault(); }}
               onTouchEnd={handleMediaTouchEnd}
             />
           </div>
