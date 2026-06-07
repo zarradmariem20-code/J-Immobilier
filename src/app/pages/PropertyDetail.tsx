@@ -4,8 +4,8 @@ import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
 import { VideoPlayer } from "../components/VideoPlayer";
 import { ArrowLeft, Bed, Bath, Maximize, MapPin, Check, Heart, CalendarDays, ChevronLeft, ChevronRight, Expand, Share2, Flag, MessageCircle, PhoneCall, PlayCircle, X } from "lucide-react";
-import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { formatPrice } from "../utils/format";
+import { getImageThumbUrl, getImageMediumUrl, getImageFullUrl, getVideoPreviewUrl } from "../utils/mediaUrls";
 import { getFavoriteIds, hasActiveAuthSession, isUserLoggedIn, toggleFavoriteId } from "../utils/storage";
 import { PropertyCard } from "../components/PropertyCard";
 import type { Property } from "../data/properties";
@@ -113,11 +113,9 @@ export function PropertyDetail() {
   const [successPulse, setSuccessPulse] = useState(false);
   const [isActiveVideoBroken, setIsActiveVideoBroken] = useState(false);
   const [activeVideoAspectRatio, setActiveVideoAspectRatio] = useState<number | null>(null);
-  const [activeImageLoaded, setActiveImageLoaded] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
   const mediaContainerRef = useRef<HTMLDivElement | null>(null);
   const activeMedia = mediaItems[activeMediaIndex] ?? { kind: "image", src: "" };
-  const isPlayableActiveVideo = activeMedia.kind === "video" && Boolean(activeMedia.src) && !isActiveVideoBroken;
   const companySocialLinks = useMemo(() => {
     if (!siteSettings?.socialLinks) {
       return defaultCompanySocialLinks;
@@ -361,111 +359,20 @@ export function PropertyDetail() {
   const relatedProperties = allProperties.filter((item) => item.id !== property.id).slice(0, 3);
 
   const handlePrevImage = () => {
-    if (!property) {
-      return;
-    }
-
-    if (!mediaItems.length) {
-      return;
-    }
-
+    if (!property) return;
+    if (!mediaItems.length) return;
     const currentIndex = activeMediaIndex >= 0 ? activeMediaIndex : 0;
-    const nextIndex = (currentIndex - 1 + mediaItems.length) % mediaItems.length;
-    setActiveImageLoaded(false);
-    setActiveMediaIndex(nextIndex);
+    setActiveMediaIndex((currentIndex - 1 + mediaItems.length) % mediaItems.length);
   };
 
   const handleNextImage = () => {
-    if (!property) {
-      return;
-    }
-
-    if (!mediaItems.length) {
-      return;
-    }
-
+    if (!property) return;
+    if (!mediaItems.length) return;
     const currentIndex = activeMediaIndex >= 0 ? activeMediaIndex : 0;
-    const nextIndex = (currentIndex + 1) % mediaItems.length;
-    setActiveImageLoaded(false);
-    setActiveMediaIndex(nextIndex);
-  };
-
-  const handleMediaTouchStart = (event: React.TouchEvent<HTMLElement>) => {
-    if (!isMobile || mediaItems.length <= 1) {
-      return;
-    }
-
-    touchStartXRef.current = event.touches[0]?.clientX ?? null;
-  };
-
-  const handleMediaTouchEnd = (event: React.TouchEvent<HTMLElement>) => {
-    if (!isMobile || mediaItems.length <= 1 || touchStartXRef.current === null) {
-      touchStartXRef.current = null;
-      return;
-    }
-
-    const touchEndX = event.changedTouches[0]?.clientX ?? touchStartXRef.current;
-    const deltaX = touchStartXRef.current - touchEndX;
-    touchStartXRef.current = null;
-
-    if (Math.abs(deltaX) < 40) {
-      return;
-    }
-
-    if (deltaX > 0) {
-      handleNextImage();
-      return;
-    }
-
-    handlePrevImage();
+    setActiveMediaIndex((currentIndex + 1) % mediaItems.length);
   };
 
   useEffect(() => {
-    const el = mediaContainerRef.current;
-    if (!el || !isMobile || mediaItems.length <= 1) return;
-
-    let startX = 0;
-    let startY = 0;
-    let locked = false;
-
-    const onTouchStart = (e: TouchEvent) => {
-      startX = e.touches[0]?.clientX ?? 0;
-      startY = e.touches[0]?.clientY ?? 0;
-      locked = false;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (locked) return;
-      const dx = Math.abs((e.touches[0]?.clientX ?? 0) - startX);
-      const dy = Math.abs((e.touches[0]?.clientY ?? 0) - startY);
-      if (dy > dx && dy > 5) {
-        locked = true;
-      }
-      if (!locked) {
-        e.preventDefault();
-      }
-    };
-
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-    };
-  }, [isMobile, mediaItems.length]);
-
-  useEffect(() => {
-    const current = mediaItems[activeMediaIndex];
-    if (current?.kind === "image" && current.src) {
-      const img = new Image();
-      img.onload = () => setActiveImageLoaded(true);
-      img.src = current.src;
-      if (img.complete) {
-        setActiveImageLoaded(true);
-      }
-    }
-
     if (mediaItems.length <= 1) return;
     const preloadIndices = [
       (activeMediaIndex + 1) % mediaItems.length,
@@ -590,95 +497,88 @@ export function PropertyDetail() {
 
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.65fr_0.95fr] overflow-hidden">
             <div className="rounded-[24px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] p-3 sm:rounded-[28px] sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)] overflow-hidden min-w-0">
-              <div className="flex items-center gap-2 sm:gap-3">
-                {mediaItems.length > 1 && !isMobile && (
+              <div className="relative overflow-hidden rounded-[18px] border border-slate-200/40 bg-slate-50 h-[240px] sm:h-[380px] md:h-[480px]"
+                ref={mediaContainerRef}
+              >
+                <div
+                  className="flex h-full transition-transform duration-300 ease-out"
+                  style={{ transform: `translateX(-${activeMediaIndex * 100}%)` }}
+                  onTouchStart={(e) => { touchStartXRef.current = e.touches[0]?.clientX ?? null; }}
+                  onTouchEnd={(e) => {
+                    if (touchStartXRef.current === null) return;
+                    const delta = touchStartXRef.current - (e.changedTouches[0]?.clientX ?? 0);
+                    touchStartXRef.current = null;
+                    if (Math.abs(delta) < 50) return;
+                    if (delta > 0) handleNextImage(); else handlePrevImage();
+                  }}
+                >
+                  {mediaItems.map((item, index) => (
+                    <div key={`${item.kind}-${index}`} className="relative h-full w-full shrink-0">
+                      {item.kind === "image" && item.src ? (
+                        <img
+                          src={getImageMediumUrl(item.src)}
+                          alt={property.title}
+                          className="h-full w-full object-cover"
+                          draggable={false}
+                        />
+                      ) : item.kind === "video" && item.src ? (
+                        <div className="flex h-full w-full items-center justify-center bg-slate-950">
+                          <VideoPlayer
+                            src={item.src}
+                            poster={coverImage || galleryImages[0] || undefined}
+                            label={property.title}
+                            preload={index === activeMediaIndex ? "auto" : "metadata"}
+                            fit="contain"
+                            onAspectRatioChange={index === activeMediaIndex ? setActiveVideoAspectRatio : undefined}
+                            onError={() => index === activeMediaIndex && setIsActiveVideoBroken(true)}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-slate-950 text-white">
+                          <PlayCircle className="h-12 w-12 text-sky-300" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {mediaItems.length > 1 && (
                   <button
                     type="button"
                     onClick={handlePrevImage}
-                    className="shrink-0 rounded-full bg-white/95 p-2.5 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-slate-200 sm:p-3"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 rounded-full bg-white/90 p-2 text-slate-900 shadow-lg hover:bg-white sm:p-2.5"
                     aria-label="Image précédente"
                   >
-                    <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+                    <ChevronLeft className="h-5 w-5" />
                   </button>
                 )}
 
-                <div
-                  ref={mediaContainerRef}
-                  className={`relative min-w-0 flex-1 overflow-hidden rounded-[18px] border border-slate-200/40 ${isPlayableActiveVideo ? "w-full bg-slate-950 sm:mx-auto sm:max-w-[420px] md:max-w-[520px]" : "h-[240px] bg-slate-50 sm:h-[380px] md:h-[480px]"}`}
-                  style={isPlayableActiveVideo ? { aspectRatio: activeVideoAspectRatio ?? "9 / 16" } : undefined}
-                  onTouchStart={handleMediaTouchStart}
-                  onTouchEnd={handleMediaTouchEnd}
-                >
-                  {activeMedia.kind === "image" && activeMedia.src ? (
-                    <>
-                      {!activeImageLoaded && (
-                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-50 animate-pulse rounded-[18px]">
-                          <svg className="h-10 w-10 text-slate-300 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                        </div>
-                      )}
-                      <img
-                        src={activeMedia.src}
-                        alt={property.title}
-                        className={`h-full w-full object-cover ${activeImageLoaded ? "opacity-100" : "opacity-0"}`}
-                        onLoad={() => setActiveImageLoaded(true)}
-                      />
-                    </>
-                  ) : isPlayableActiveVideo ? (
-                    <VideoPlayer
-                      src={activeMedia.src}
-                      poster={coverImage || galleryImages[0] || undefined}
-                      label={property.title}
-                      preload="auto"
-                      fit="contain"
-                      onAspectRatioChange={setActiveVideoAspectRatio}
-                      onError={() => setIsActiveVideoBroken(true)}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-slate-950 px-6 text-center text-white">
-                      <PlayCircle className="h-12 w-12 text-sky-300" />
-                      <div>
-                        <p className="text-base font-semibold">Vidéo indisponible</p>
-                        <p className="mt-1 text-sm text-slate-300">Passez aux photos dans le carrousel pour voir les autres médias du bien.</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeMedia.kind === "image" && (
-                    <button
-                      type="button"
-                      onClick={() => setIsFullscreenOpen(true)}
-                      className="absolute right-4 top-4 rounded-full bg-white/95 backdrop-blur-sm p-2.5 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-white/50"
-                      aria-label="Agrandir l'image"
-                    >
-                      <Expand className="h-4 w-4" />
-                    </button>
-                  )}
-
-                  {activeMedia.kind === "video" && isActiveVideoBroken && (
-                    <div className="absolute left-4 top-4 rounded-full bg-black/65 px-3 py-1 text-xs font-semibold text-white">
-                      Vidéo indisponible
-                    </div>
-                  )}
-
-                  {mediaItems.length > 0 && (
-                    <div className="absolute right-3 top-14 rounded-[10px] bg-black/55 backdrop-blur-sm px-3 py-1.5 text-xs font-semibold text-white border border-white/20 sm:right-4 sm:top-auto sm:bottom-4 sm:px-4 sm:py-2 sm:text-sm">
-                      {Math.max(1, activeMediaIndex + 1)} / {mediaItems.length}
-                    </div>
-                  )}
-                </div>
-
-                {mediaItems.length > 1 && !isMobile && (
+                {mediaItems.length > 1 && (
                   <button
                     type="button"
                     onClick={handleNextImage}
-                    className="shrink-0 rounded-full bg-white/95 p-2.5 text-slate-900 shadow-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-110 border border-slate-200 sm:p-3"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 rounded-full bg-white/90 p-2 text-slate-900 shadow-lg hover:bg-white sm:p-2.5"
                     aria-label="Image suivante"
                   >
-                    <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+                    <ChevronRight className="h-5 w-5" />
                   </button>
+                )}
+
+                {activeMedia.kind === "image" && activeMedia.src && (
+                  <button
+                    type="button"
+                    onClick={() => setIsFullscreenOpen(true)}
+                    className="absolute right-3 top-3 z-10 rounded-full bg-white/95 backdrop-blur-sm p-2 text-slate-900 shadow-lg hover:bg-white"
+                    aria-label="Agrandir l'image"
+                  >
+                    <Expand className="h-4 w-4" />
+                  </button>
+                )}
+
+                {mediaItems.length > 0 && (
+                  <div className="absolute right-3 bottom-3 z-10 rounded-[10px] bg-black/55 backdrop-blur-sm px-3 py-1.5 text-xs font-semibold text-white border border-white/20 sm:px-4 sm:py-2 sm:text-sm">
+                    {Math.max(1, activeMediaIndex + 1)} / {mediaItems.length}
+                  </div>
                 )}
               </div>
 
@@ -688,7 +588,7 @@ export function PropertyDetail() {
                     <button
                       key={`${item.kind}-${item.src}-${index}`}
                       type="button"
-                      onClick={() => { setActiveImageLoaded(false); setActiveMediaIndex(index); }}
+                      onClick={() => setActiveMediaIndex(index) }
                       className={`h-16 w-24 shrink-0 overflow-hidden rounded-[12px] border transition-all duration-200 ${
                         activeMediaIndex === index ? "border-sky-400 ring-2 ring-sky-300/40 shadow-lg" : "border-slate-300 hover:border-slate-400 hover:shadow-md"
                       }`}
@@ -708,7 +608,7 @@ export function PropertyDetail() {
                           </span>
                         </div>
                       ) : (
-                        <ImageWithFallback src={item.src} alt={property.title} className="h-full w-full object-cover" />
+                        <img src={getImageThumbUrl(item.src)} alt={property.title} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                       )}
                     </button>
                   ))}
@@ -1135,12 +1035,18 @@ export function PropertyDetail() {
               </button>
             )}
 
-            <ImageWithFallback
-              src={activeMedia.src}
+            <img
+              src={getImageFullUrl(activeMedia.src)}
               alt={property?.title || "Image en plein écran"}
               className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
-              onTouchStart={handleMediaTouchStart}
-              onTouchEnd={handleMediaTouchEnd}
+              onTouchStart={(e) => { touchStartXRef.current = e.touches[0]?.clientX ?? null; }}
+              onTouchEnd={(e) => {
+                if (touchStartXRef.current === null) return;
+                const delta = touchStartXRef.current - (e.changedTouches[0]?.clientX ?? 0);
+                touchStartXRef.current = null;
+                if (Math.abs(delta) < 50) return;
+                if (delta > 0) handleNextImage(); else handlePrevImage();
+              }}
             />
           </div>
         </div>

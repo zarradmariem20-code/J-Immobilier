@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
+import { Search } from "lucide-react";
 import MapLocationPicker from "../components/MapLocationPicker";
 import {
   type BureauSettings,
@@ -44,6 +45,8 @@ export default function AdminSettings() {
     hasPassword: false,
     loading: false,
   });
+  const [regionSearch, setRegionSearch] = useState("");
+  const [showAllRegions, setShowAllRegions] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -99,6 +102,32 @@ export default function AdminSettings() {
     updateSettings((prev) => ({
       ...prev,
       bureaus: prev.bureaus.filter((_, bureauIndex) => bureauIndex !== index),
+    }));
+  };
+
+  const addRegion = () => {
+    updateSettings((prev) => ({
+      ...prev,
+      regions: [
+        ...(prev.regions ?? []),
+        { name: "", cities: [] },
+      ],
+    }));
+  };
+
+  const updateRegion = (index: number, updater: (region: { name: string; cities: string[] }) => { name: string; cities: string[] }) => {
+    updateSettings((prev) => ({
+      ...prev,
+      regions: (prev.regions ?? []).map((region, regionIndex) =>
+        regionIndex === index ? updater(region) : region,
+      ),
+    }));
+  };
+
+  const removeRegion = (index: number) => {
+    updateSettings((prev) => ({
+      ...prev,
+      regions: (prev.regions ?? []).filter((_, regionIndex) => regionIndex !== index),
     }));
   };
 
@@ -381,6 +410,130 @@ export default function AdminSettings() {
           </div>
         </section>
 
+
+        {/* Section gestion régions/villes */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold">Gestion des régions et villes</h2>
+              <p className="mt-1 text-sm text-slate-600">Ajoutez ou modifiez les régions et les villes qui apparaissent sur le site.</p>
+            </div>
+            <button
+              type="button"
+              onClick={addRegion}
+              className="rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+            >
+              Ajouter une région
+            </button>
+          </div>
+
+          <div className="relative mt-4 mb-3">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={regionSearch}
+              onChange={(e) => setRegionSearch(e.target.value)}
+              placeholder="Rechercher une région..."
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-sky-300 focus:outline-none"
+            />
+          </div>
+
+          <div className="mt-4 space-y-4">
+            {(settings.regions ?? [])
+              .filter((r) => !regionSearch || r.name.toLowerCase().includes(regionSearch.toLowerCase()))
+              .slice(0, showAllRegions ? undefined : 2)
+              .map((region, regionIdx) => {
+                const originalRegionIdx = (settings.regions ?? []).findIndex((r) => r === region);
+                if (originalRegionIdx === -1) return null;
+                return (
+                <div key={`${region.name}-${originalRegionIdx}`} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start">
+                    <div className="grid gap-3">
+                      <label className="space-y-1">
+                        <span className="text-sm font-medium text-slate-600">Nom de la région</span>
+                        <input
+                          value={region.name}
+                          onChange={(e) => updateRegion(originalRegionIdx, (current) => ({ ...current, name: e.target.value }))}
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2.5"
+                          placeholder="Ex : Sousse"
+                        />
+                      </label>
+                      <div className="space-y-2">
+                        <span className="text-sm font-medium text-slate-600">Villes associées</span>
+                        <div className="flex flex-wrap gap-2">
+                          {region.cities.map((city, cityIdx) => (
+                            <span key={`${originalRegionIdx}-${cityIdx}`} className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 text-sm text-slate-800">
+                              {city}
+                              <button
+                                type="button"
+                                className="text-rose-500 hover:text-rose-700"
+                                onClick={() => updateRegion(originalRegionIdx, (current) => ({
+                                  ...current,
+                                  cities: current.cities.filter((_, idx) => idx !== cityIdx),
+                                }))}
+                                aria-label="Supprimer la ville"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <form
+                        className="flex flex-col gap-2 sm:flex-row"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const form = e.target as HTMLFormElement;
+                          const input = form.elements.namedItem(`newCity-${originalRegionIdx}`) as HTMLInputElement;
+                          const newCity = input?.value.trim();
+                          if (!newCity) return;
+                          updateRegion(originalRegionIdx, (current) => {
+                            if (current.cities.includes(newCity)) return current;
+                            return { ...current, cities: [...current.cities, newCity] };
+                          });
+                          if (input) input.value = "";
+                        }}
+                      >
+                        <input
+                          name={`newCity-${originalRegionIdx}`}
+                          type="text"
+                          className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                          placeholder="Ajouter une ville..."
+                        />
+                        <button
+                          type="submit"
+                          className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto"
+                        >
+                          Ajouter la ville
+                        </button>
+                      </form>
+                    </div>
+                    <div className="flex items-start justify-end">
+                      <button
+                        type="button"
+                        onClick={() => removeRegion(originalRegionIdx)}
+                        className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+                      >
+                        Supprimer la région
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {(settings.regions ?? []).filter((r) => !regionSearch || r.name.toLowerCase().includes(regionSearch.toLowerCase())).length > 2 && (
+              <button
+                type="button"
+                onClick={() => setShowAllRegions(!showAllRegions)}
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                {showAllRegions ? "Voir moins" : `Voir plus (${(settings.regions ?? []).filter((r) => !regionSearch || r.name.toLowerCase().includes(regionSearch.toLowerCase())).length - 2} autres)`}
+              </button>
+            )}
+          </div>
+        </section>
+
+        {/* ...existing code... (section annonces) */}
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-lg font-bold">Barre d'annonces</h2>
           <p className="mt-1 text-sm text-slate-600">

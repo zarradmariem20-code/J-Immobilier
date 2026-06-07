@@ -32,12 +32,42 @@ type SiteSettings = {
     tiktok: string;
   };
   announcementItems: string[];
+  regions?: Array<{
+    name: string;
+    cities: string[];
+  }>;
 };
 
 const DEFAULT_SETTINGS: SiteSettings = {
   brand: {
     companyName: "Journal Immobilier",
   },
+  regions: [
+    { name: "Ariana", cities: ["Ariana", "La Soukra", "Raoued", "Ettadhamen", "Mnihla", "Sidi Thabet"] },
+    { name: "Beja", cities: ["Beja", "Medjez el Bab", "Testour", "Teboursouk", "Nefza"] },
+    { name: "Ben Arous", cities: ["Ben Arous", "El Mourouj", "Hammam Lif", "Rades", "Ezzahra", "Fouchana", "Mornag"] },
+    { name: "Bizerte", cities: ["Bizerte", "Menzel Bourguiba", "Mateur", "Ras Jebel", "Menzel Jemil", "Ghar El Melh"] },
+    { name: "Gabes", cities: ["Gabes", "El Hamma", "Mareth", "Metouia", "Ghannouch", "Matmata"] },
+    { name: "Gafsa", cities: ["Gafsa", "Metlaoui", "Redeyef", "Moulares", "El Ksar", "Mdhila"] },
+    { name: "Jendouba", cities: ["Jendouba", "Tabarka", "Bou Salem", "Ain Draham", "Ghardimaou", "Fernana"] },
+    { name: "Kairouan", cities: ["Kairouan", "Bou Hajla", "Haffouz", "Sbikha", "Oueslatia", "Hajeb El Ayoun"] },
+    { name: "Kasserine", cities: ["Kasserine", "Sbeitla", "Feriana", "Thala", "Foussana", "Haidra"] },
+    { name: "Kebili", cities: ["Kebili", "Douz", "Souk Lahad", "El Golaa", "Djemna", "Faouar"] },
+    { name: "Le Kef", cities: ["El Kef", "Tajerouine", "Dahmani", "Sakiet Sidi Youssef", "Jerissa", "Sers"] },
+    { name: "Mahdia", cities: ["Mahdia", "El Jem", "Ksour Essef", "Chebba", "Essouassi", "Rejiche"] },
+    { name: "Manouba", cities: ["Manouba", "Oued Ellil", "Douar Hicher", "Mornaguia", "Tebourba", "Djedeida"] },
+    { name: "Medenine", cities: ["Medenine", "Ben Gardane", "Zarzis", "Houmt Souk", "Midoun", "Ajim"] },
+    { name: "Monastir", cities: ["Monastir", "Moknine", "Ksar Hellal", "Teboulba", "Jemmal", "Bekalta"] },
+    { name: "Nabeul", cities: ["Nabeul", "Hammamet", "Kelibia", "Korba", "Menzel Temime", "Soliman", "Grombalia"] },
+    { name: "Sfax", cities: ["Sfax", "Sakiet Ezzit", "Sakiet Eddaier", "Thyna", "Skhira", "Mahares", "Jebiniana"] },
+    { name: "Sidi Bouzid", cities: ["Sidi Bouzid", "Regueb", "Jilma", "Bir El Hafey", "Meknassy", "Mezzouna"] },
+    { name: "Siliana", cities: ["Siliana", "Maktar", "Bou Arada", "Gaafour", "Rouhia", "El Krib"] },
+    { name: "Sousse", cities: ["Sousse", "Hammam Sousse", "Akouda", "Msaken", "Kalaa Kebira", "Kalaa Sghira", "Sidi Bou Ali", "Chott Meriem", "Enfidha", "Bouficha"] },
+    { name: "Tataouine", cities: ["Tataouine", "Ghomrassen", "Bir Lahmar", "Dehiba", "Remada"] },
+    { name: "Tozeur", cities: ["Tozeur", "Nafta", "Degache", "Tamerza", "El Hamma du Jerid"] },
+    { name: "Tunis", cities: ["Tunis", "La Marsa", "Le Bardo", "La Goulette", "Le Kram", "Carthage", "Sidi Bou Said"] },
+    { name: "Zaghouan", cities: ["Zaghouan", "El Fahs", "Nadhour", "Bir Mcherga", "Zriba"] },
+  ],
   contact: {
     officeAddressLines: ["Bouhsina", "Sousse, Tunisie"],
     officeMapQuery: "Bouhsina Sousse Tunisie",
@@ -152,6 +182,24 @@ function normalizeSettings(input: any): SiteSettings {
     tiktok: safeString(input?.socialLinks?.tiktok, DEFAULT_SETTINGS.socialLinks.tiktok, 300),
   };
 
+  const regions = Array.isArray(input?.regions)
+    ? input.regions
+        .slice(0, 50)
+        .map((region: any) => ({
+          name: safeString(region?.name, "", 120),
+          cities: Array.isArray(region?.cities)
+            ? region.cities
+                .filter((city: unknown) => typeof city === "string")
+                .map((city: string) => city.trim())
+                .filter(Boolean)
+                .slice(0, 50)
+            : [],
+        }))
+        .filter((region: { name: string; cities: string[] }) => region.name)
+    : DEFAULT_SETTINGS.regions;
+
+  const normalizedRegions = regions.length > 0 ? regions : DEFAULT_SETTINGS.regions;
+
   const announcementItems: string[] = Array.isArray(input?.announcementItems)
     ? input.announcementItems
         .filter((item: unknown) => typeof item === "string")
@@ -165,6 +213,7 @@ function normalizeSettings(input: any): SiteSettings {
     contact,
     bureaus: normalizedBureaus.length > 0 ? normalizedBureaus : DEFAULT_SETTINGS.bureaus,
     socialLinks,
+    regions: normalizedRegions,
     announcementItems: announcementItems.length > 0 ? announcementItems : DEFAULT_SETTINGS.announcementItems,
   };
 }

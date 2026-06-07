@@ -33,10 +33,11 @@ import {
 } from "../utils/storage";
 import { useLocation, useNavigate } from "react-router";
 import { BrandLogo } from "../components/BrandLogo";
-import { approveListingWithBackend, clearListingsCache, deleteListingWithBackend, getProperties, inactivateListingWithBackend, getVisits, getVisitsAnalytics, subscribeToPropertiesRealtime, updateVisit } from "../../lib/api";
+import { approveListingWithBackend, clearListingsCache, deleteListingWithBackend, emitPropertiesChanged, getProperties, inactivateListingWithBackend, getVisits, getVisitsAnalytics, subscribeToPropertiesRealtime, updateVisit, getPublicSiteSettings, type SiteSettings } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
 import { VISIT_STATUS_LABELS, VISIT_STATUS_COLORS, formatVisitDate, formatVisitDateTime, isVisitOverdue } from "../data/visits";
-import { getCitiesForRegion, inferRegionCity, tunisiaRegionOptions } from "../data/locations";
+import { inferRegionCity } from "../data/locations";
+import { getRegionOptions, getCitiesForRegionBySettings } from "../utils/locationSettings";
 import type { Visit } from "../../lib/database.types";
 
 const statusChip: Record<ListingSubmission["status"], string> = {
@@ -69,8 +70,13 @@ function toSafeNumber(value: unknown, fallback = 0) {
 
 function mergeListingEntries(primary: ListingSubmission, secondary: ListingSubmission): ListingSubmission {
   return {
-    ...secondary,
     ...primary,
+    ...secondary,
+    fullName: primary.fullName ?? secondary.fullName,
+    email: primary.email ?? secondary.email,
+    phone: primary.phone ?? secondary.phone,
+    photoCount: primary.photoCount ?? secondary.photoCount,
+    hasVideo: primary.hasVideo ?? secondary.hasVideo,
     supabaseId: primary.supabaseId ?? secondary.supabaseId,
     coverImage: primary.coverImage || secondary.coverImage,
     gallery: (primary.gallery && primary.gallery.length > 0) ? primary.gallery : secondary.gallery,
@@ -121,6 +127,17 @@ export function Admin() {
   const [statusFilter, setStatusFilter] = useState<"all" | ListingSubmission["status"]>("all");
   const [listingRegionFilter, setListingRegionFilter] = useState<string>("all");
   const [listingCityFilter, setListingCityFilter] = useState<string>("all");
+  const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
+  const regionOptions = getRegionOptions(siteSettings);
+  const [regionSearch, setRegionSearch] = useState("");
+  const [showAllRegions, setShowAllRegions] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersRef = useRef<HTMLDivElement | null>(null);
+  const filteredRegionOptions = regionSearch
+    ? regionOptions.filter((r) => r.toLowerCase().includes(regionSearch.toLowerCase()))
+    : regionOptions;
+  const visibleRegions = showAllRegions ? filteredRegionOptions : filteredRegionOptions.slice(0, 2);
+  const listingCityOptions = listingRegionFilter !== "all" ? getCitiesForRegionBySettings(siteSettings, listingRegionFilter) : [];
 
   // Visits state
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -157,7 +174,6 @@ export function Admin() {
 
   const ADMIN_EMAIL = "admin@tawla.tn";
   const ADMIN_PASSWORD = "Admin@2026";
-  const listingCityOptions = listingRegionFilter !== "all" ? getCitiesForRegion(listingRegionFilter) : [];
   const getAdminFilterSelectClass = (hasValue: boolean) => `h-full w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2 pr-9 text-xs font-semibold transition focus:border-sky-300 focus:outline-none ${hasValue ? "text-slate-700" : "text-slate-500"}`;
 
   useEffect(() => {
@@ -218,6 +234,27 @@ export function Admin() {
     };
   }, [isVisitSortPanelOpen]);
 
+  useEffect(() => {
+    const handleOutsideFilters = (event: MouseEvent) => {
+      if (!filtersOpen) return;
+      const target = event.target as Node | null;
+      if (filtersRef.current && target && !filtersRef.current.contains(target)) {
+        setFiltersOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideFilters);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideFilters);
+    };
+  }, [filtersOpen]);
+
+
+
+  useEffect(() => {
+    getPublicSiteSettings().then(setSiteSettings).catch(() => undefined);
+  }, []);
+
   const refreshPublished = async (forceRefresh = false) => {
     setLoadingPublished(true);
     try {
@@ -225,11 +262,6 @@ export function Admin() {
       const rows = await withTimeout(getProperties({ forceRefresh, includeArchived: true }), 10000);
       const submissions = syncListingSubmissionsFromDatabase(rows ?? []);
       setItems(submissions);
-      const linkedIds = new Set(
-        submissions
-          .map((item) => item.supabaseId)
-          .filter((value): value is number => typeof value === "number"),
-      );
       const externalPublished: ListingSubmission[] = (rows ?? [])
         .map((row: any) => {
           const normalizedId =
@@ -240,7 +272,7 @@ export function Admin() {
                 : Number.NaN;
           return { row, normalizedId };
         })
-        .filter(({ normalizedId }) => Number.isFinite(normalizedId) && !linkedIds.has(normalizedId))
+        .filter(({ normalizedId }) => Number.isFinite(normalizedId))
         .map(({ row, normalizedId }) => ({
           id: `db-${normalizedId}`,
           publicId: normalizedId,
@@ -1198,6 +1230,9 @@ export function Admin() {
     setStatusFilter("all");
     setListingRegionFilter("all");
     setListingCityFilter("all");
+    setRegionSearch("");
+    setShowAllRegions(false);
+    setFiltersOpen(false);
     if (activeView === "listings" && location.search.length > 0) {
       navigate("/admin/listings", { replace: true });
     }
@@ -1447,6 +1482,7 @@ export function Admin() {
           prev.map((item) => (item.id === id ? { ...item, featured: newFeatured } : item)),
         );
         clearListingsCache();
+        emitPropertiesChanged();
       } catch (err) {
         console.error("Erreur mise a jour featured Supabase:", err);
       }
@@ -1465,6 +1501,7 @@ export function Admin() {
           .update({ featured: newFeatured })
           .eq("id", submission.supabaseId);
         clearListingsCache();
+        emitPropertiesChanged();
       } catch (err) {
         console.error("Erreur mise à jour featured Supabase:", err);
       }
@@ -1836,61 +1873,121 @@ export function Admin() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Rechercher bien, client ou email"
-                    className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-xs font-semibold text-slate-700 placeholder:font-medium placeholder:text-slate-400 focus:border-sky-300 focus:outline-none"
+                    className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-xs font-semibold text-slate-700 placeholder:font-medium placeholder:text-slate-400 focus:border-sky-300 focus:outline-none"
                   />
                 </div>
-                <div className="relative">
-                  <select
-                    value={listingRegionFilter}
-                    onChange={(e) => {
-                      const nextRegion = e.target.value;
-                      setListingRegionFilter(nextRegion);
-                      setListingCityFilter("all");
-                    }}
-                    className={getAdminFilterSelectClass(listingRegionFilter !== "all")}
-                  >
-                    <option value="all">Toutes les regions</option>
-                    {tunisiaRegionOptions.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                </div>
-                <div className="relative">
-                  <select
-                    value={listingCityFilter}
-                    onChange={(e) => setListingCityFilter(e.target.value)}
-                    disabled={listingRegionFilter === "all"}
-                    className={`${getAdminFilterSelectClass(listingCityFilter !== "all")} disabled:cursor-not-allowed disabled:text-slate-400 disabled:opacity-60`}
-                  >
-                    <option value="all">{listingRegionFilter === "all" ? "Choisir une region" : "Toutes les villes"}</option>
-                    {listingCityOptions.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                </div>
-                <div className="relative">
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as "all" | ListingSubmission["status"])}
-                    className={getAdminFilterSelectClass(statusFilter !== "all")}
-                  >
-                    <option value="all">Tous statuts</option>
-                    <option value="pending">En attente</option>
-                    <option value="approved">Visibles</option>
-                    <option value="rejected">Invisibles</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <div className="flex items-center gap-2">
+                  <div className="relative" ref={filtersRef}>
+                    <button
+                      type="button"
+                      onClick={() => setFiltersOpen(!filtersOpen)}
+                      className={`inline-flex items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition h-9 ${filtersOpen ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900"}`}
+                    >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                    Filtres
+                    {(listingRegionFilter !== "all" || listingCityFilter !== "all" || statusFilter !== "all") && (
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-[10px] font-bold text-white">
+                        {[listingRegionFilter !== "all", listingCityFilter !== "all", statusFilter !== "all"].filter(Boolean).length}
+                      </span>
+                    )}
+                  </button>
+                  {filtersOpen && (
+                    <div className="absolute right-0 z-50 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+                      <div className="mb-3">
+                        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Region</label>
+                        <div className="relative mb-2">
+                          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={regionSearch}
+                            onChange={(e) => setRegionSearch(e.target.value)}
+                            placeholder="Rechercher"
+                            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-2 text-xs font-medium text-slate-700 placeholder:text-slate-400 focus:border-sky-300 focus:outline-none"
+                          />
+                        </div>
+                        <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setListingRegionFilter("all");
+                              setListingCityFilter("all");
+                            }}
+                            className={`w-full px-3 py-1.5 text-left text-xs font-medium transition ${listingRegionFilter === "all" ? "bg-sky-50 text-sky-700" : "text-slate-600 hover:bg-slate-50"}`}
+                          >
+                            Toutes les regions
+                          </button>
+                          {visibleRegions.map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => {
+                                setListingRegionFilter(option);
+                                setListingCityFilter("all");
+                              }}
+                              className={`w-full px-3 py-1.5 text-left text-xs font-medium transition ${listingRegionFilter === option ? "bg-sky-50 text-sky-700" : "text-slate-600 hover:bg-slate-50"}`}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                          {filteredRegionOptions.length > 2 && !showAllRegions && (
+                            <button
+                              type="button"
+                              onClick={() => setShowAllRegions(true)}
+                              className="w-full px-3 py-1.5 text-left text-xs font-medium text-slate-500 transition hover:bg-slate-50"
+                            >
+                              Voir plus ({filteredRegionOptions.length - 2} autres)
+                            </button>
+                          )}
+                          {showAllRegions && (
+                            <button
+                              type="button"
+                              onClick={() => setShowAllRegions(false)}
+                              className="w-full px-3 py-1.5 text-left text-xs font-medium text-slate-500 transition hover:bg-slate-50"
+                            >
+                              Voir moins
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mb-3">
+                        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Ville</label>
+                        <select
+                          value={listingCityFilter}
+                          onChange={(e) => setListingCityFilter(e.target.value)}
+                          disabled={listingRegionFilter === "all"}
+                          className="w-full appearance-none rounded-lg border border-slate-200 bg-white py-1.5 pl-3 pr-8 text-xs font-medium text-slate-700 focus:border-sky-300 focus:outline-none disabled:cursor-not-allowed disabled:text-slate-400 disabled:opacity-60"
+                        >
+                          <option value="all">{listingRegionFilter === "all" ? "Choisir une region" : "Toutes les villes"}</option>
+                          {listingCityOptions.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Statut</label>
+                        <select
+                          value={statusFilter}
+                          onChange={(e) => setStatusFilter(e.target.value as "all" | ListingSubmission["status"])}
+                          className="w-full appearance-none rounded-lg border border-slate-200 bg-white py-1.5 pl-3 pr-8 text-xs font-medium text-slate-700 focus:border-sky-300 focus:outline-none"
+                        >
+                          <option value="all">Tous statuts</option>
+                          <option value="pending">En attente</option>
+                          <option value="approved">Visibles</option>
+                          <option value="rejected">Invisibles</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"
                   onClick={clearListingFilters}
                   disabled={!hasListingFiltersApplied}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 h-9 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Effacer filtres
                 </button>
+              </div>
               </div>
             </div>
 

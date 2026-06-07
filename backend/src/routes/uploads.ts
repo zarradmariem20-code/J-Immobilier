@@ -7,7 +7,10 @@ import {
   getR2ConfigurationIssue,
   isR2Configured,
   uploadVideoBuffer,
+  uploadVideoPreviewBuffer,
 } from "../services/r2.js";
+import { processImage } from "../utils/imageProcessing.js";
+import { generateVideoPreview } from "../utils/videoPreview.js";
 
 const router = Router();
 const MEDIA_BUCKET = "listing-media";
@@ -101,7 +104,60 @@ router.put("/video-upload", requireAuth, express.raw({ type: "video/*", limit: "
     }
 
     const result = await uploadVideoBuffer(filename, contentType, req.body);
-    res.json(result);
+
+    let previewUrl: string | null = null;
+    try {
+      const previewBuffer = await generateVideoPreview(req.body, filename);
+      const previewKey = result.key.replace(/\.[^.]+$/, "-preview.webm");
+      const previewResult = await uploadVideoPreviewBuffer(previewKey, previewBuffer);
+      previewUrl = previewResult.publicUrl;
+    } catch {
+      // Preview generation is best-effort; don't fail the upload
+    }
+
+    res.json({ publicUrl: result.publicUrl, key: result.key, previewUrl });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/video-preview", requireAuth, async (req, res, next) => {
+  try {
+    if (!isR2Configured()) {
+      res.status(503).json({
+        error: getR2ConfigurationIssue() || "Le service de televersement video n'est pas configure sur le serveur.",
+      });
+      return;
+    }
+
+    const videoUrl = typeof req.body?.videoUrl === "string" ? req.body.videoUrl.trim() : "";
+    const videoKey = typeof req.body?.videoKey === "string" ? req.body.videoKey.trim() : "";
+
+    if (!videoUrl || !videoKey) {
+      res.status(400).json({ error: "videoUrl et videoKey sont requis." });
+      return;
+    }
+
+    const previewKey = videoKey.replace(/\.[^.]+$/, "-preview.webm");
+
+    const response = await fetch(videoUrl);
+    if (!response.ok) {
+      res.status(502).json({ error: "Impossible de telecharger la video depuis le stockage." });
+      return;
+    }
+
+    const videoBuffer = Buffer.from(await response.arrayBuffer());
+
+    let previewBuffer: Buffer;
+    try {
+      previewBuffer = await generateVideoPreview(videoBuffer, videoKey);
+    } catch {
+      res.status(500).json({ error: "Impossible de generer l'apercu video." });
+      return;
+    }
+
+    const previewResult = await uploadVideoPreviewBuffer(previewKey, previewBuffer);
+    res.json({ previewUrl: previewResult.publicUrl, previewKey });
   } catch (error) {
     next(error);
   }
@@ -135,26 +191,56 @@ router.put("/photo-upload", requireAuth, express.raw({ type: "image/*", limit: "
     }
 
     const supabase = createSupabaseStorageClient(authHeader);
-    const filePath = buildMediaObjectPath(filename, "photos");
-    const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(filePath, req.body, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType,
-    });
+    const basePath = buildMediaObjectPath(filename, "photos").replace(/\.[^.]+$/, "");
 
-    if (error) {
-      res.status(500).json({ error: `Impossible d'envoyer la photo : ${error.message}` });
+    let sizes;
+    try {
+      sizes = await processImage(req.body);
+    } catch {
+      const fallbackPath = `${basePath}.jpg`;
+      const { error: uploadError } = await supabase.storage.from(MEDIA_BUCKET).upload(fallbackPath, req.body, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType,
+      });
+      if (uploadError) {
+        res.status(500).json({ error: `Impossible d'envoyer la photo : ${uploadError.message}` });
+        return;
+      }
+      const { data } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(fallbackPath);
+      res.json({ publicUrl: data?.publicUrl ?? "", mediumUrl: data?.publicUrl ?? "", thumbUrl: data?.publicUrl ?? "", path: fallbackPath });
       return;
     }
 
-    const { data } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(filePath);
+    const [fullResult, mediumResult, thumbResult] = await Promise.all([
+      supabase.storage.from(MEDIA_BUCKET).upload(`${basePath}-full.webp`, sizes.full.buffer, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: "image/webp",
+      }),
+      supabase.storage.from(MEDIA_BUCKET).upload(`${basePath}-medium.webp`, sizes.medium.buffer, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: "image/webp",
+      }),
+      supabase.storage.from(MEDIA_BUCKET).upload(`${basePath}-thumb.webp`, sizes.thumb.buffer, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: "image/webp",
+      }),
+    ]);
 
-    if (!data?.publicUrl) {
-      res.status(500).json({ error: "Impossible de recuperer l'URL publique de la photo." });
+    const uploadError = fullResult.error || mediumResult.error || thumbResult.error;
+    if (uploadError) {
+      res.status(500).json({ error: `Impossible d'envoyer la photo : ${uploadError.message}` });
       return;
     }
 
-    res.json({ publicUrl: data.publicUrl, path: filePath });
+    const fullUrl = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(`${basePath}-full.webp`).data?.publicUrl ?? "";
+    const mediumUrl = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(`${basePath}-medium.webp`).data?.publicUrl ?? "";
+    const thumbUrl = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(`${basePath}-thumb.webp`).data?.publicUrl ?? "";
+
+    res.json({ publicUrl: mediumUrl, mediumUrl, thumbUrl, fullUrl, path: `${basePath}-medium.webp` });
   } catch (error) {
     next(error);
   }

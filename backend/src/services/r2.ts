@@ -209,6 +209,24 @@ export async function uploadVideoBuffer(originalFilename: string, contentType: s
   };
 }
 
+export async function uploadVideoPreviewBuffer(previewKey: string, body: Uint8Array) {
+  const config = getR2Config();
+  const r2 = getR2Client();
+
+  await r2.send(new PutObjectCommand({
+    Bucket: config.bucketName,
+    Key: previewKey,
+    Body: body,
+    ContentType: previewKey.endsWith(".webm") ? "video/webm" : "video/mp4",
+    CacheControl: "public, max-age=31536000, immutable",
+  }));
+
+  return {
+    publicUrl: `${config.publicUrlBase}/${previewKey}`,
+    key: previewKey,
+  };
+}
+
 export async function deleteR2Object(key: string) {
   const config = getR2Config();
   const r2 = getR2Client();

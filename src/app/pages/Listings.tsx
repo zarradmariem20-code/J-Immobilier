@@ -3,7 +3,8 @@ import { Link, useSearchParams } from "react-router";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
 import { PropertyCard } from "../components/PropertyCard";
-import { getCitiesForRegion, tunisiaRegionOptions } from "../data/locations";
+import { getPublicSiteSettings, type SiteSettings } from "../../lib/api";
+import { getRegionOptions, getCitiesForRegionBySettings } from "../utils/locationSettings";
 import { ArrowLeft, BadgeDollarSign, Bath, BedDouble, Building2, ChevronDown, House, KeyRound, LandPlot, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import type { Property } from "../data/properties";
 import { getCachedPublicProperties, getPublicPropertiesAsync, hasCachedPublicProperties } from "../utils/publicListings";
@@ -54,6 +55,9 @@ export function Listings() {
   const [allProperties, setAllProperties] = useState<Property[]>(() => getCachedPublicProperties());
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [typeOpen, setTypeOpen] = useState(false);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
+  const regionOptions = getRegionOptions(siteSettings);
+  const listingCityOptions = selectedRegion !== "all" ? getCitiesForRegionBySettings(siteSettings, selectedRegion) : [];
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const transactionRef = useRef<HTMLDivElement | null>(null);
@@ -63,6 +67,10 @@ export function Listings() {
   const filterBarRef = useRef<HTMLElement | null>(null);
   const [filterActsAsHeader, setFilterActsAsHeader] = useState(false);
   const [isLoading, setIsLoading] = useState(() => !hasCachedPublicProperties());
+
+  useEffect(() => {
+    getPublicSiteSettings().then(setSiteSettings).catch(() => undefined);
+  }, []);
 
   const combinedPropertyGroups = {
     residential: Array.from(new Set([...propertyTypesByTransaction.Vente.residential, ...propertyTypesByTransaction.Location.residential])),
@@ -115,7 +123,7 @@ export function Listings() {
   ] as const;
   const selectedBudgetLabel = budgetOptions.find((item) => item.value === priceRange)?.label ?? "Tous les budgets";
   const selectedTransaction = transactionOptions.find((item) => item.value === transactionType) ?? transactionOptions[0];
-  const cityOptions = selectedRegion !== "all" ? getCitiesForRegion(selectedRegion) : [];
+  const cityOptions = selectedRegion !== "all" ? listingCityOptions : [];
   const getSelectTextClass = (hasValue: boolean) => hasValue ? "text-slate-900" : "text-slate-500";
   const showRoomFilters = propertyTypesWithRoomFilters.has(filterType);
 
@@ -473,7 +481,7 @@ export function Listings() {
                     className={`${fieldInputClass} appearance-none ${getSelectTextClass(selectedRegion !== "all")}`}
                   >
                     <option value="all">Toutes les regions</option>
-                    {tunisiaRegionOptions.map((option) => (
+                    {regionOptions.map((option) => (
                       <option key={option} value={option}>{option}</option>
                     ))}
                   </select>

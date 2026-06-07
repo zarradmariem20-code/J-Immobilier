@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, LocateFixed, Save } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
-import { approveListingWithBackend, clearListingsCache, getProperties, uploadAllMedia } from "../../lib/api";
-import { deriveLocationLabel, getCitiesForRegion, inferRegionCity, tunisiaRegionOptions } from "../data/locations";
+import { approveListingWithBackend, clearListingsCache, getProperties, uploadAllMedia, getPublicSiteSettings, type SiteSettings } from "../../lib/api";
+import { deriveLocationLabel, inferRegionCity, tunisiaRegionOptions } from "../data/locations";
+import { getRegionOptions, getCitiesForRegionBySettings } from "../utils/locationSettings";
 import {
   getAdminSession,
   getListingSubmissions,
@@ -158,7 +159,9 @@ export function AdminEditListing() {
   const [existingVideoUrl, setExistingVideoUrl] = useState("");
   const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
   const [newVideoPreviewUrl, setNewVideoPreviewUrl] = useState("");
-  const cityOptions = getCitiesForRegion(formState.region);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
+  const regionOptions = getRegionOptions(siteSettings);
+  const cityOptions = formState.region ? getCitiesForRegionBySettings(siteSettings, formState.region) : [];
   const galleryPreviewUrls = useMemo(
     () => [...existingGalleryUrls, ...newPhotoPreviews],
     [existingGalleryUrls, newPhotoPreviews],
@@ -170,6 +173,10 @@ export function AdminEditListing() {
       navigate("/admin");
     }
   }, [adminSession, navigate]);
+
+  useEffect(() => {
+    getPublicSiteSettings().then(setSiteSettings).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const loadListing = async () => {
@@ -472,7 +479,7 @@ export function AdminEditListing() {
                     <label className="mb-1.5 block text-xs font-semibold text-slate-600">Region</label>
                     <select value={formState.region} onChange={(e) => setFormState((current) => ({ ...current, region: e.target.value, city: "", location: deriveLocationLabel(e.target.value, "", current.location) }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:outline-none">
                       <option value="">Selectionner une region</option>
-                      {tunisiaRegionOptions.map((option) => (
+                      {regionOptions.map((option) => (
                         <option key={option} value={option}>{option}</option>
                       ))}
                     </select>

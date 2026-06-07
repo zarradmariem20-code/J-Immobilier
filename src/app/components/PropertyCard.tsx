@@ -1,147 +1,189 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Bed, Bath, Heart, Maximize, MapPin } from "lucide-react";
 import { Property } from "../data/properties";
 import { formatPrice } from "../utils/format";
 import { getFavoriteIds, hasActiveAuthSession, toggleFavoriteId } from "../utils/storage";
+import { getImageThumbUrl, getVideoPreviewUrl } from "../utils/mediaUrls";
 
 interface PropertyCardProps {
   property: Property;
 }
 
+function destroyVideo(video: HTMLVideoElement | null) {
+  if (!video) return;
+  try {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  } catch {}
+  video.remove();
+}
+
 export function PropertyCard({ property }: PropertyCardProps) {
   const [isFavorite, setIsFavorite] = useState(false);
-  const [isVideoBroken, setIsVideoBroken] = useState(false);
   const [isHoverCapable, setIsHoverCapable] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
   const articleRef = useRef<HTMLElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaRef = useRef<HTMLDivElement | null>(null);
+  const activeVideoRef = useRef<HTMLVideoElement | null>(null);
+
   const showcaseVideoSrc = property.videoUrl?.trim() || null;
+  const videoPreviewSrc = showcaseVideoSrc ? getVideoPreviewUrl(showcaseVideoSrc) : null;
+  const videoSrcToUse = videoPreviewSrc || showcaseVideoSrc;
   const fallbackImageSrc = [property.gallery?.[0], property.image]
     .map((item) => item?.trim() || "")
+    .map((item) => item ? getImageThumbUrl(item) : "")
     .find((item) => item.length > 0) || null;
+
+  const needsVideoPoster = !fallbackImageSrc && videoSrcToUse;
 
   useEffect(() => {
     setIsFavorite(getFavoriteIds().includes(property.id));
   }, [property.id]);
 
   useEffect(() => {
-    setIsVideoBroken(false);
-  }, [showcaseVideoSrc]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      return;
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const update = () => setIsHoverCapable(mq.matches);
+    update();
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", update);
+      return () => mq.removeEventListener("change", update);
     }
+    mq.addListener(update);
+    return () => mq.removeListener(update);
+  }, []);
 
-    const mediaQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
-    const updateHoverCapability = () => setIsHoverCapable(mediaQuery.matches);
+  const spawnVideo = useCallback(() => {
+    const container = mediaRef.current;
+    if (!container || !videoSrcToUse || activeVideoRef.current) return;
 
-    updateHoverCapability();
+    const video = document.createElement("video");
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.setAttribute("playsinline", "");
+    video.setAttribute("muted", "");
+    video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2;";
 
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", updateHoverCapability);
-      return () => mediaQuery.removeEventListener("change", updateHoverCapability);
-    }
+    container.insertBefore(video, container.firstChild);
+    activeVideoRef.current = video;
 
-    mediaQuery.addListener(updateHoverCapability);
-    return () => mediaQuery.removeListener(updateHoverCapability);
+    let destroyed = false;
+    let triedOriginal = false;
+    const safeDestroy = () => {
+      if (destroyed) return;
+      destroyed = true;
+      if (activeVideoRef.current === video) activeVideoRef.current = null;
+      destroyVideo(video);
+    };
+
+    video.oncanplay = () => {
+      if (destroyed) return;
+      video.play().catch(safeDestroy);
+    };
+
+    video.onerror = () => {
+      if (destroyed) return;
+      if (!triedOriginal && showcaseVideoSrc && videoSrcToUse !== showcaseVideoSrc) {
+        triedOriginal = true;
+        video.src = showcaseVideoSrc;
+        video.load();
+        return;
+      }
+      safeDestroy();
+    };
+
+    video.src = videoSrcToUse;
+    video.load();
+  }, [videoSrcToUse, showcaseVideoSrc]);
+
+  const destroyActiveVideo = useCallback(() => {
+    const video = activeVideoRef.current;
+    if (!video) return;
+    activeVideoRef.current = null;
+    destroyVideo(video);
   }, []);
 
   useEffect(() => {
-    const article = articleRef.current;
-    if (!article || typeof IntersectionObserver === "undefined") {
-      setIsVisible(true);
-      return;
+    const container = mediaRef.current;
+    if (!container || !videoSrcToUse) return;
+
+    if (isHoverCapable) {
+      const onEnter = () => spawnVideo();
+      const onLeave = () => destroyActiveVideo();
+      container.addEventListener("mouseenter", onEnter);
+      container.addEventListener("mouseleave", onLeave);
+      return () => {
+        container.removeEventListener("mouseenter", onEnter);
+        container.removeEventListener("mouseleave", onLeave);
+        destroyActiveVideo();
+      };
     }
+
+    if (typeof IntersectionObserver === "undefined") return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        setIsVisible(entry.isIntersecting && entry.intersectionRatio >= 0.6);
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+          spawnVideo();
+        } else {
+          destroyActiveVideo();
+        }
       },
-      {
-        threshold: [0.25, 0.6, 0.85],
-      }
+      { threshold: [0.25, 0.6, 0.85] }
     );
 
-    observer.observe(article);
-    return () => observer.disconnect();
-  }, []);
+    observer.observe(container);
+    return () => {
+      observer.disconnect();
+      destroyActiveVideo();
+    };
+  }, [isHoverCapable, videoSrcToUse, spawnVideo, destroyActiveVideo]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !showcaseVideoSrc || isVideoBroken) {
-      return;
-    }
-
-    const shouldPlay = isHoverCapable ? isHovered : isVisible;
-
-    if (shouldPlay) {
-      const playPromise = video.play();
-      if (playPromise && typeof playPromise.catch === "function") {
-        playPromise.catch(() => {
-          // Ignore autoplay interruptions from the browser.
-        });
-      }
-      return;
-    }
-
-    video.pause();
-  }, [isHoverCapable, isHovered, isVisible, isVideoBroken, showcaseVideoSrc]);
-
-  const shouldPlayVideo = Boolean(showcaseVideoSrc && !isVideoBroken && (isHoverCapable ? isHovered : isVisible));
+  useEffect(() => () => destroyActiveVideo(), [destroyActiveVideo]);
 
   const handleFavoriteClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-
     if (!(await hasActiveAuthSession())) {
       window.dispatchEvent(new CustomEvent("open-auth-modal", { detail: { mode: "login" } }));
       return;
     }
-
     setIsFavorite(toggleFavoriteId(property.id).includes(property.id));
   };
 
   return (
     <article
       ref={articleRef}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       className="group overflow-hidden rounded-[20px] border border-white/60 bg-white shadow-[0_18px_34px_rgba(15,23,42,0.08)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(15,23,42,0.12)] sm:rounded-[28px]"
     >
-      <div className="relative h-64 overflow-hidden sm:h-64 lg:h-80">
-        <Link to={`/property/${property.id}`} target="_blank" rel="noopener noreferrer">
-          {showcaseVideoSrc && !isVideoBroken ? (
-            <video
-              ref={videoRef}
-              src={showcaseVideoSrc}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              loop
-              muted
-              playsInline
-              preload="metadata"
-              onLoadedData={(event) => {
-                const video = event.currentTarget;
-                if (!shouldPlayVideo && video.currentTime === 0) {
-                  try {
-                    video.currentTime = 0.05;
-                  } catch {
-                    // Ignore browsers that disallow seeking before enough data is buffered.
-                  }
-                }
-              }}
-              onError={() => setIsVideoBroken(true)}
-            >
-              Votre navigateur ne peut pas lire cette vidéo.
-            </video>
-          ) : fallbackImageSrc ? (
+      <div ref={mediaRef} className="relative h-64 overflow-hidden sm:h-64 lg:h-80">
+        <Link to={`/property/${property.id}`} target="_blank" rel="noopener noreferrer" className="relative z-0 block h-full">
+          {fallbackImageSrc ? (
             <img
               src={fallbackImageSrc}
               alt={property.title}
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               loading="lazy"
+              decoding="async"
+            />
+          ) : needsVideoPoster ? (
+            <video
+              src={videoSrcToUse}
+              muted
+              playsInline
+              preload="metadata"
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              onLoadedData={(e) => {
+                try { e.currentTarget.currentTime = 0.1; } catch {}
+              }}
+              onError={(e) => {
+                if (showcaseVideoSrc && e.currentTarget.src !== showcaseVideoSrc) {
+                  e.currentTarget.src = showcaseVideoSrc;
+                }
+              }}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-slate-100 px-4 text-center text-sm font-semibold text-slate-500">
@@ -149,7 +191,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
             </div>
           )}
         </Link>
-        <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2.5 sm:p-4">
+        <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between p-2.5 sm:p-4">
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
             <div className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] sm:px-3 sm:text-xs sm:tracking-[0.18em] ${property.transactionType === "Location" ? "bg-amber-300 text-slate-950" : "bg-emerald-300 text-slate-950"}`}>
               {property.transactionType}
@@ -159,7 +201,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
             type="button"
             aria-label={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
             onClick={handleFavoriteClick}
-            className={`rounded-full p-2.5 backdrop-blur transition sm:p-3 ${
+            className={`z-10 rounded-full p-2.5 backdrop-blur transition sm:p-3 ${
               isFavorite
                 ? "bg-rose-500 text-white shadow-lg shadow-rose-500/30"
                 : "bg-white/90 text-slate-700 hover:bg-white"

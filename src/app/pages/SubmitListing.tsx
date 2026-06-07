@@ -5,7 +5,9 @@ import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
 import { LoginModal } from "../components/LoginModal";
 import MapLocationPicker from "../components/MapLocationPicker";
-import { deriveLocationLabel, getCitiesForRegion, tunisiaRegionOptions } from "../data/locations";
+import { deriveLocationLabel, tunisiaRegionOptions } from "../data/locations";
+import { getPublicSiteSettings, type SiteSettings } from "../../lib/api";
+import { getRegionOptions, getCitiesForRegionBySettings } from "../utils/locationSettings";
 import { supabase } from "../../lib/supabase";
 import { createSubmission, updateSubmissionMedia, uploadAllMedia, uploadVideoFileDirect } from "../../lib/api";
 import { createListingSubmission, getAuthProfile, isUserLoggedIn, updateListingSubmission } from "../utils/storage";
@@ -143,7 +145,9 @@ export function SubmitListing() {
   const [isLoading, setIsLoading] = useState(false);
   const [submissionReceipt, setSubmissionReceipt] = useState<SubmissionReceipt | null>(null);
   const [isLocating, setIsLocating] = useState(false);
-  const cityOptions = getCitiesForRegion(region);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
+  const regionOptions = getRegionOptions(siteSettings);
+  const cityOptions = region ? getCitiesForRegionBySettings(siteSettings, region) : [];
   const allPropertyTypes = Array.from(new Set([
     ...propertyTypesByTransaction.Vente,
     ...propertyTypesByTransaction.Location,
@@ -186,6 +190,10 @@ export function SubmitListing() {
       isMounted = false;
       listener.subscription.unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    getPublicSiteSettings().then(setSiteSettings).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -805,7 +813,7 @@ export function SubmitListing() {
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-[#1f5f96] focus:bg-white focus:outline-none"
                     >
                       <option value="">Selectionner une region</option>
-                      {tunisiaRegionOptions.map((option) => (
+                      {regionOptions.map((option) => (
                         <option key={option} value={option}>{option}</option>
                       ))}
                     </select>

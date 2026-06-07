@@ -129,6 +129,16 @@ export function Footer() {
                   Contact
                 </Link>
               </li>
+              <li>
+                <Link to="/terms-of-service" className="text-sm text-slate-400 transition-colors hover:text-white">
+                  Conditions d'utilisation
+                </Link>
+              </li>
+              <li>
+                <Link to="/privacy-policy" className="text-sm text-slate-400 transition-colors hover:text-white">
+                  Politique de confidentialité
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -163,6 +173,11 @@ export function Footer() {
 
         <div className="mt-10 border-t border-white/10 pt-8 text-center text-sm text-slate-400">
           <p>&copy; 2026 Journal Immobilier. Tous droits réservés.</p>
+          <div className="mt-2 flex items-center justify-center gap-4">
+            <Link to="/terms-of-service" className="transition-colors hover:text-white">Conditions d'utilisation</Link>
+            <span className="text-slate-600">·</span>
+            <Link to="/privacy-policy" className="transition-colors hover:text-white">Politique de confidentialité</Link>
+          </div>
         </div>
       </div>
     </footer>

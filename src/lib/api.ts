@@ -139,7 +139,7 @@ function clearPropertyStorageCache() {
   }
 }
 
-function emitPropertiesChanged() {
+export function emitPropertiesChanged() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("properties-changed"));
 }
@@ -272,6 +272,7 @@ export interface SiteSettings {
     instagram: string;
     tiktok: string;
   };
+  regions?: Array<{ name: string; cities: string[] }>;
   announcementItems: string[];
 }
 
@@ -315,6 +316,11 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     instagram: "https://www.instagram.com/journal_immobilier?igsh=Mzl3eDE2eHZneGlv",
     tiktok: "https://www.tiktok.com/@journal_immo2?is_from_webapp=1&sender_device=pc",
   },
+  regions: [
+    { name: "Sousse", cities: ["Sousse", "Akouda", "Hammam Sousse"] },
+    { name: "Tunis", cities: ["Tunis", "La Marsa", "Carthage"] },
+    { name: "Sfax", cities: ["Sfax", "Sakiet Ezzit"] },
+  ],
   announcementItems: [
     "Nous publions votre bien sur Facebook, Instagram et TikTok",
     "Marketing réseaux sociaux 100% gratuit pour votre annonce",
@@ -1183,7 +1189,7 @@ async function uploadVideoFileViaBackend(file: File, options: VideoUploadOptions
 
   options.onProgress?.(100);
 
-  return payload.publicUrl as string;
+  return { videoUrl: payload.publicUrl as string, previewUrl: (payload.previewUrl as string) ?? null };
 }
 
 async function uploadPhotoFileViaBackend(file: File) {
@@ -1302,7 +1308,26 @@ export async function uploadVideoFileDirect(file: File, options: VideoUploadOpti
 
   options.onProgress?.(100);
 
-  return payload.publicUrl as string;
+  let previewUrl: string | null = null;
+  try {
+    const previewResponse = await withTimeout(
+      fetch(`${BACKEND_BASE_URL}/api/uploads/video-preview`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl: payload.publicUrl, videoKey: payload.key }),
+      }),
+      60_000,
+      "La generation de l'apercu video prend trop de temps."
+    );
+    if (previewResponse.ok) {
+      const previewData = await previewResponse.json();
+      previewUrl = previewData.previewUrl ?? null;
+    }
+  } catch {
+    // Preview generation is best-effort
+  }
+
+  return { videoUrl: payload.publicUrl as string, previewUrl };
 }
 
 async function uploadMediaFile(file: File, folder: "photos" | "videos") {
@@ -1343,9 +1368,15 @@ async function uploadMediaFile(file: File, folder: "photos" | "videos") {
 
 export async function uploadAllMedia(photos: File[], videoFile?: File | null) {
   const photoUrls = await Promise.all(photos.map((file) => uploadPhotoFileViaBackend(file)));
-  const videoUrl = videoFile
-    ? await uploadVideoFileDirect(videoFile).catch(() => uploadMediaFile(videoFile, "videos"))
-    : null;
+  let videoResult: { videoUrl: string; previewUrl: string | null } | null = null;
+  if (videoFile) {
+    try {
+      videoResult = await uploadVideoFileDirect(videoFile);
+    } catch {
+      const fallbackUrl = await uploadMediaFile(videoFile, "videos");
+      videoResult = { videoUrl: fallbackUrl, previewUrl: null };
+    }
+  }
 
-  return { photoUrls, videoUrl };
+  return { photoUrls, videoUrl: videoResult?.videoUrl ?? null, videoPreviewUrl: videoResult?.previewUrl ?? null };
 }

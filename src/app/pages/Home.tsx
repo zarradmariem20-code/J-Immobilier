@@ -4,7 +4,8 @@ import { ArrowRight, Award, BadgeDollarSign, ChevronDown, Heart, Home as HomeIco
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
 import { PropertyCard } from "../components/PropertyCard";
-import { getCitiesForRegion, tunisiaRegionOptions } from "../data/locations";
+import { getPublicSiteSettings, type SiteSettings } from "../../lib/api";
+import { getRegionOptions, getCitiesForRegionBySettings } from "../utils/locationSettings";
 import editorialImageTwo from "../../assets/image1.jpeg";
 import ownerHeroImage from "../../assets/image.png";
 import brandWordmark from "../../assets/tawla2.png";
@@ -18,7 +19,7 @@ import { subscribeToPropertiesRealtime } from "../../lib/api";
 
 export function Home() {
   const [publicProperties, setPublicProperties] = useState<Property[]>(() => getCachedPublicProperties());
-  const featuredProperties = publicProperties.filter((p) => p.featured).slice(0, 6);
+  const featuredProperties = publicProperties.filter((p) => p.featured);
   const [searchRegion, setSearchRegion] = useState("");
   const [searchCity, setSearchCity] = useState("");
   const [searchType, setSearchType] = useState("all");
@@ -26,7 +27,9 @@ export function Home() {
   const [typeOpen, setTypeOpen] = useState(false);
   const typeRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
-  const cityOptions = getCitiesForRegion(searchRegion);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
+  const regionOptions = getRegionOptions(siteSettings);
+  const cityOptions = searchRegion ? getCitiesForRegionBySettings(siteSettings, searchRegion) : [];
 
   const propertyTypesByTransaction = {
     Vente: ["Appartement", "Villa", "Terrain", "Local commercial", "Bureau", "Immeuble", "Terrain agricole", "Usine"],
@@ -53,6 +56,10 @@ export function Home() {
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    getPublicSiteSettings().then(setSiteSettings).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -171,7 +178,7 @@ export function Home() {
                   className={`${getSelectTriggerClass(Boolean(searchRegion))} pl-7`}
                 >
                   <option value="">Toutes les regions</option>
-                  {tunisiaRegionOptions.map((option) => (
+                  {regionOptions.map((option) => (
                     <option key={option} value={option}>{option}</option>
                   ))}
                 </select>

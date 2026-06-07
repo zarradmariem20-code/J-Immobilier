@@ -440,12 +440,28 @@ export function syncListingSubmissionsFromDatabase(rows: Array<any>): ListingSub
 
     const nextItem: ListingSubmission = {
       ...item,
+      title: row.title ?? item.title,
+      price: Number(row.price ?? item.price),
+      transactionType: row.transaction_type === "Location" ? "Location" : "Vente",
+      region: row.region ?? item.region,
+      city: row.city ?? item.city,
+      location: row.location ?? item.location,
+      propertyType: row.type ?? item.propertyType,
+      bedrooms: Number(row.bedrooms ?? item.bedrooms),
+      bathrooms: Number(row.bathrooms ?? item.bathrooms),
+      area: Number(row.area ?? item.area),
+      description: row.description ?? item.description,
+      coverImage: row.image ?? item.coverImage,
+      gallery: Array.isArray(row.gallery) ? row.gallery : item.gallery,
+      videoUrl: row.video_url ?? item.videoUrl,
+      features: Array.isArray(row.features) ? row.features : item.features,
+      tags: Array.isArray(row.tags) ? row.tags : item.tags,
       status: syncedStatus,
       featured: syncedFeatured,
       reviewedAt: row.updated_at ?? row.created_at ?? item.reviewedAt,
     };
 
-    if (nextItem.status !== item.status || nextItem.featured !== item.featured || nextItem.reviewedAt !== item.reviewedAt) {
+    if (nextItem.title !== item.title || nextItem.price !== item.price || nextItem.status !== item.status || nextItem.featured !== item.featured || nextItem.reviewedAt !== item.reviewedAt) {
       hasChanges = true;
     }
 

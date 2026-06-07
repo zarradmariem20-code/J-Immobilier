@@ -16,6 +16,8 @@ import Notifications from "./pages/Notifications";
 import AccountSettings from "./pages/AccountSettings";
 import LanguageSettings from "./pages/LanguageSettings";
 import AdminSettings from "./pages/AdminSettings";
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 export const router = createBrowserRouter([
       {
@@ -105,5 +107,13 @@ export const router = createBrowserRouter([
   {
     path: "/account/language",
     Component: LanguageSettings,
+  },
+  {
+    path: "/terms-of-service",
+    Component: TermsOfService,
+  },
+  {
+    path: "/privacy-policy",
+    Component: PrivacyPolicy,
   },
 ]);
