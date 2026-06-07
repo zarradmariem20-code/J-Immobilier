@@ -437,6 +437,10 @@ router.post("/submissions/approve", async (req, res) => {
       };
       let socialResults = {};
       if (socialOptions.postToFacebook || socialOptions.postToInstagram || socialOptions.postToTikTok) {
+        const imageUrl = propertyPayload.image || undefined;
+        const socialImageUrl = imageUrl?.includes("-medium.webp")
+          ? imageUrl.replace("-medium.webp", "-social.jpg")
+          : imageUrl;
         socialResults = await postListingToSocial(
           {
             title: propertyPayload.title,
@@ -445,7 +449,8 @@ router.post("/submissions/approve", async (req, res) => {
             transactionType: propertyPayload.transaction_type ?? "Vente",
             propertyType: propertyPayload.type ?? "Bien",
             location: propertyPayload.location,
-            imageUrl: propertyPayload.image || undefined,
+            imageUrl,
+            socialImageUrl,
             videoUrl: propertyPayload.video_url || undefined,
             propertyId: submission.supabaseId,
           },
@@ -526,6 +531,10 @@ router.post("/submissions/approve", async (req, res) => {
     };
     let socialResults = {};
     if (socialOptions.postToFacebook || socialOptions.postToInstagram || socialOptions.postToTikTok) {
+      const imageUrl = propertyPayload.image || undefined;
+      const socialImageUrl = imageUrl?.includes("-medium.webp")
+        ? imageUrl.replace("-medium.webp", "-social.jpg")
+        : imageUrl;
       socialResults = await postListingToSocial(
         {
           title: propertyPayload.title,
@@ -534,7 +543,8 @@ router.post("/submissions/approve", async (req, res) => {
           transactionType: propertyPayload.transaction_type ?? "Vente",
           propertyType: propertyPayload.type ?? "Bien",
           location: propertyPayload.location,
-          imageUrl: propertyPayload.image || undefined,
+          imageUrl,
+          socialImageUrl,
           videoUrl: propertyPayload.video_url || undefined,
           propertyId: insertedId,
         },

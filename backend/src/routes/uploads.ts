@@ -212,7 +212,7 @@ router.put("/photo-upload", requireAuth, express.raw({ type: "image/*", limit: "
       return;
     }
 
-    const [fullResult, mediumResult, thumbResult] = await Promise.all([
+    const [fullResult, mediumResult, thumbResult, socialResult] = await Promise.all([
       supabase.storage.from(MEDIA_BUCKET).upload(`${basePath}-full.webp`, sizes.full.buffer, {
         cacheControl: "3600",
         upsert: false,
@@ -228,9 +228,14 @@ router.put("/photo-upload", requireAuth, express.raw({ type: "image/*", limit: "
         upsert: false,
         contentType: "image/webp",
       }),
+      supabase.storage.from(MEDIA_BUCKET).upload(`${basePath}-social.jpg`, sizes.social.buffer, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: "image/jpeg",
+      }),
     ]);
 
-    const uploadError = fullResult.error || mediumResult.error || thumbResult.error;
+    const uploadError = fullResult.error || mediumResult.error || thumbResult.error || socialResult.error;
     if (uploadError) {
       res.status(500).json({ error: `Impossible d'envoyer la photo : ${uploadError.message}` });
       return;
@@ -239,8 +244,9 @@ router.put("/photo-upload", requireAuth, express.raw({ type: "image/*", limit: "
     const fullUrl = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(`${basePath}-full.webp`).data?.publicUrl ?? "";
     const mediumUrl = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(`${basePath}-medium.webp`).data?.publicUrl ?? "";
     const thumbUrl = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(`${basePath}-thumb.webp`).data?.publicUrl ?? "";
+    const socialUrl = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(`${basePath}-social.jpg`).data?.publicUrl ?? "";
 
-    res.json({ publicUrl: mediumUrl, mediumUrl, thumbUrl, fullUrl, path: `${basePath}-medium.webp` });
+    res.json({ publicUrl: mediumUrl, mediumUrl, thumbUrl, fullUrl, socialUrl, path: `${basePath}-medium.webp` });
   } catch (error) {
     next(error);
   }

@@ -10,6 +10,7 @@ export interface ImageSizes {
   full: ProcessedImage;
   medium: ProcessedImage;
   thumb: ProcessedImage;
+  social: ProcessedImage;
 }
 
 export async function processImage(inputBuffer: Buffer): Promise<ImageSizes> {
@@ -31,9 +32,15 @@ export async function processImage(inputBuffer: Buffer): Promise<ImageSizes> {
     .webp({ quality: 75 })
     .toBuffer();
 
+  const social = await sharp(inputBuffer)
+    .resize({ width: Math.min(1200, inputWidth), withoutEnlargement: true })
+    .jpeg({ quality: 82, mozjpeg: true })
+    .toBuffer();
+
   return {
     full: { buffer: full, width: Math.min(1200, inputWidth), quality: 82 },
     medium: { buffer: medium, width: Math.min(800, inputWidth), quality: 80 },
     thumb: { buffer: thumb, width: Math.min(400, inputWidth), quality: 75 },
+    social: { buffer: social, width: Math.min(1200, inputWidth), quality: 82 },
   };
 }

@@ -17,6 +17,7 @@ export interface SocialPostPayload {
   propertyType: string;
   location: string;
   imageUrl?: string;
+  socialImageUrl?: string;
   videoUrl?: string;
   propertyId: number;
 }
@@ -77,14 +78,15 @@ export async function postToFacebook(payload: SocialPostPayload): Promise<{ post
 
   const caption = buildCaption(payload);
   const listingUrl = buildListingUrl(payload.propertyId);
+  const facebookImageUrl = payload.socialImageUrl || payload.imageUrl;
 
-  if (payload.imageUrl) {
+  if (facebookImageUrl) {
     // Photo post via /photos — published to the feed automatically
     const resp = await fetch(`https://graph.facebook.com/v20.0/${pageId}/photos`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        url: payload.imageUrl,
+        url: facebookImageUrl,
         caption,
         access_token: accessToken,
       }),
@@ -127,7 +129,8 @@ export async function postToInstagram(payload: SocialPostPayload): Promise<{ pos
     throw new Error("META_IG_BUSINESS_ID or META_PAGE_ACCESS_TOKEN not configured.");
   }
 
-  if (!payload.imageUrl) {
+  const igImage = payload.socialImageUrl || payload.imageUrl;
+  if (!igImage) {
     throw new Error("Instagram requires an image URL to post.");
   }
 
@@ -138,7 +141,7 @@ export async function postToInstagram(payload: SocialPostPayload): Promise<{ pos
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      image_url: payload.imageUrl,
+      image_url: igImage,
       caption,
       access_token: accessToken,
     }),
