@@ -519,6 +519,8 @@ export function PropertyDetail() {
                           src={getImageMediumUrl(item.src)}
                           alt={property.title}
                           className="h-full w-full object-cover"
+                          loading={index === activeMediaIndex ? "eager" : "lazy"}
+                          decoding="async"
                           draggable={false}
                         />
                       ) : item.kind === "video" && item.src ? (

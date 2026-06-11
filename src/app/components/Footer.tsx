@@ -100,6 +100,8 @@ export function Footer() {
                     src={item.logoSrc}
                     alt={item.label}
                     className="h-full w-full rounded-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </a>
               ))}

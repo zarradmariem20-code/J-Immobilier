@@ -127,7 +127,7 @@ export function Home() {
       <Header />
       <section className="relative overflow-visible border-b border-slate-200 bg-slate-950">
         <div className="absolute inset-0">
-          <img src={editorialImageTwo} alt="Immobilier Tunisie" className="h-full w-full object-cover" />
+          <img src={editorialImageTwo} alt="Immobilier Tunisie" className="h-full w-full object-cover" loading="eager" fetchPriority="high" />
           <div className="absolute inset-0 bg-slate-950/55" />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.38)_0%,rgba(2,6,23,0.72)_100%)]" />
         </div>
@@ -434,6 +434,8 @@ export function Home() {
                       src={ownerHeroImage}
                       alt="Propriétaire immobilier"
                       className="h-72 w-full rounded-[26px] border border-white/15 object-cover shadow-[0_24px_50px_rgba(2,6,23,0.20)] sm:h-80 lg:h-[390px]"
+                      loading="lazy"
+                      decoding="async"
                     />
                     <div className="absolute -right-5 bottom-4 left-8 rounded-[20px] border border-white/15 bg-black/25 px-4 py-3 text-white backdrop-blur-md sm:-right-6 sm:bottom-5 sm:left-10 lg:-right-8 lg:bottom-6 lg:left-14">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-200">Présentation premium</p>

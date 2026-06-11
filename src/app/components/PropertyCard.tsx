@@ -62,7 +62,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
     video.muted = true;
     video.loop = true;
     video.playsInline = true;
-    video.preload = "auto";
+    video.preload = isHoverCapable ? "auto" : "metadata";
     video.setAttribute("playsinline", "");
     video.setAttribute("muted", "");
     video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2;";
@@ -97,7 +97,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
 
     video.src = videoSrcToUse;
     video.load();
-  }, [videoSrcToUse, showcaseVideoSrc]);
+  }, [videoSrcToUse, showcaseVideoSrc, isHoverCapable]);
 
   const destroyActiveVideo = useCallback(() => {
     const video = activeVideoRef.current;
