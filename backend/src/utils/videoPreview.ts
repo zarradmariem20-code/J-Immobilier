@@ -2,7 +2,10 @@ import { execFile } from "node:child_process";
 import { readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import ffmpegStatic from "ffmpeg-static";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const ffmpegStatic: string | null = require("ffmpeg-static");
 
 function getFfmpegPath(): string {
   if (!ffmpegStatic) {

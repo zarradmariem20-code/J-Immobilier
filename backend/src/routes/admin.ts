@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { dbPool } from "../lib/db.js";
 import { postListingToSocial } from "../services/social.js";
+import { generateVideoPreview } from "../utils/videoPreview.js";
+import { uploadVideoPreviewBuffer } from "../services/r2.js";
 
 const router = Router();
 
@@ -1055,6 +1057,61 @@ router.delete("/visits/:visitId", async (req, res) => {
     return res.json({ id: visitId });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || "Failed to delete visit." });
+  }
+});
+
+// ─── Batch video preview generation ─────────────────────────────────────────
+
+router.post("/batch-video-previews", async (req, res) => {
+  try {
+    if (!dbPool) {
+      return res.status(500).json({ error: "Backend DB not configured." });
+    }
+
+    const { videos } = req.body as { videos: Array<{ propertyId: number; videoUrl: string }> };
+
+    if (!Array.isArray(videos) || videos.length === 0) {
+      return res.status(400).json({ error: "videos array is required." });
+    }
+
+    const results: Array<{ propertyId: number; status: string; previewUrl?: string; error?: string }> = [];
+
+    for (const { propertyId, videoUrl } of videos) {
+      try {
+        // Check if preview already exists
+        const previewUrl = videoUrl.replace(/\.[^.]+$/, "-preview.webm");
+        const headResp = await fetch(previewUrl, { method: "HEAD", redirect: "follow" });
+        if (headResp.ok) {
+          results.push({ propertyId, status: "already_exists", previewUrl });
+          continue;
+        }
+
+        // Download video
+        const videoResp = await fetch(videoUrl, { redirect: "follow" });
+        if (!videoResp.ok) {
+          results.push({ propertyId, status: "error", error: `HTTP ${videoResp.status} downloading video` });
+          continue;
+        }
+
+        const videoBuffer = Buffer.from(await videoResp.arrayBuffer());
+        const ext = videoUrl.split(".").pop()?.toLowerCase() || "mp4";
+
+        // Generate preview
+        const previewBuffer = await generateVideoPreview(videoBuffer, ext);
+
+        // Upload to R2
+        const r2Key = videoUrl.replace(/.*r2\.dev\//, "").replace(/\.[^.]+$/, "-preview.webm");
+        const uploadResult = await uploadVideoPreviewBuffer(r2Key, previewBuffer);
+
+        results.push({ propertyId, status: "created", previewUrl: uploadResult.publicUrl });
+      } catch (err: any) {
+        results.push({ propertyId, status: "error", error: err?.message || "Unknown error" });
+      }
+    }
+
+    return res.json({ results });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || "Batch preview generation failed." });
   }
 });
 

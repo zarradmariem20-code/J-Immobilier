@@ -10,7 +10,8 @@
     "dev:backend": "node scripts/run-optional-backend.mjs dev",
     "build:backend": "node scripts/run-optional-backend.mjs build",
     "db:migrate": "node scripts/run-optional-backend.mjs db:migrate",
-    "db:seed": "node scripts/run-optional-backend.mjs db:seed"
+    "db:seed": "node scripts/run-optional-backend.mjs db:seed",
+    "reprocess": "cd backend && npx tsx scripts/reprocess-media.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
