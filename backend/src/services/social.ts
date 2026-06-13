@@ -199,7 +199,7 @@ async function igCreateItemContainer(
 
 async function igCreateAndPublish(
   igUserId: string, body: Record<string, unknown>, accessToken: string,
-): Promise<string> {
+): Promise<{ postId: string }> {
   const containerResp = await fetch(`https://graph.facebook.com/v20.0/${igUserId}/media`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -222,7 +222,7 @@ async function igCreateAndPublish(
   if (!publishResp.ok || publishData.error) {
     throw new Error(publishData?.error?.message ?? "Instagram media publish failed.");
   }
-  return publishData.id;
+  return { postId: publishData.id };
 }
 
 export async function postToInstagram(payload: SocialPostPayload): Promise<{ postId: string }> {
