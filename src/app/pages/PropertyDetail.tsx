@@ -112,7 +112,7 @@ export function PropertyDetail() {
   const [submitMessageKind, setSubmitMessageKind] = useState<"info" | "success" | "error">("info");
   const [successPulse, setSuccessPulse] = useState(false);
   const [isActiveVideoBroken, setIsActiveVideoBroken] = useState(false);
-  const [activeVideoAspectRatio, setActiveVideoAspectRatio] = useState<number | null>(null);
+
   const touchStartXRef = useRef<number | null>(null);
   const mediaContainerRef = useRef<HTMLDivElement | null>(null);
   const activeMedia = mediaItems[activeMediaIndex] ?? { kind: "image", src: "" };
@@ -311,7 +311,6 @@ export function PropertyDetail() {
 
     setActiveMediaIndex(preferredInitialMediaIndex);
     setIsActiveVideoBroken(false);
-    setActiveVideoAspectRatio(null);
     setIsFavorite(getFavoriteIds().includes(property.id));
     setFormState({
       fullName: isLoggedIn ? userProfile.fullName : "",
@@ -498,10 +497,10 @@ export function PropertyDetail() {
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.65fr_0.95fr] overflow-hidden">
             <div className="-mx-4 sm:mx-0 sm:rounded-[28px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)] overflow-hidden min-w-0">
               <div
-                className="relative overflow-hidden sm:rounded-[18px] sm:border sm:border-slate-200/40 bg-slate-50"
+                className={`relative overflow-hidden sm:rounded-[18px] sm:border sm:border-slate-200/40 bg-slate-50${activeMedia.kind === "video" ? " mx-auto" : ""}`}
                 ref={mediaContainerRef}
-                style={activeMedia.kind === "video" && activeVideoAspectRatio
-                  ? { aspectRatio: `${activeVideoAspectRatio}`, height: "auto", maxHeight: "80vh" }
+                style={activeMedia.kind === "video"
+                  ? { aspectRatio: "9/16", maxHeight: "clamp(380px, 70vh, 600px)", maxWidth: "calc(100% - 2rem)" }
                   : { height: "clamp(240px, 50vw, 480px)" }}
               >
                 <div
@@ -517,7 +516,7 @@ export function PropertyDetail() {
                   }}
                 >
                   {mediaItems.map((item, index) => (
-                    <div key={`${item.kind}-${index}`} className="relative h-full w-full shrink-0">
+                    <div key={`${item.kind}-${index}`} className="relative h-full shrink-0 basis-full">
                       {item.kind === "image" && item.src ? (
                         <img
                           src={getImageMediumUrl(item.src)}
@@ -528,14 +527,13 @@ export function PropertyDetail() {
                           draggable={false}
                         />
                       ) : item.kind === "video" && item.src ? (
-                        <div className="h-full w-full">
+                        <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
                           <VideoPlayer
                             src={item.src}
                             poster={coverImage || galleryImages[0] || undefined}
                             label={property.title}
                             preload={index === activeMediaIndex ? "auto" : "metadata"}
-                            fit="contain"
-                            onAspectRatioChange={index === activeMediaIndex ? setActiveVideoAspectRatio : undefined}
+                            fit="cover"
                             onError={() => index === activeMediaIndex && setIsActiveVideoBroken(true)}
                           />
                         </div>
@@ -582,7 +580,7 @@ export function PropertyDetail() {
                 )}
 
                 {mediaItems.length > 0 && (
-                  <div className="absolute right-3 bottom-3 z-10 rounded-[10px] bg-black/55 backdrop-blur-sm px-3 py-1.5 text-xs font-semibold text-white border border-white/20 sm:px-4 sm:py-2 sm:text-sm">
+                  <div className="absolute left-3 top-3 z-10 rounded-[10px] bg-black/55 backdrop-blur-sm px-3 py-1.5 text-xs font-semibold text-white border border-white/20 sm:px-4 sm:py-2 sm:text-sm">
                     {Math.max(1, activeMediaIndex + 1)} / {mediaItems.length}
                   </div>
                 )}
