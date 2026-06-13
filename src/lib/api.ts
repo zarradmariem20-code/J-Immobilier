@@ -977,11 +977,19 @@ export async function getProperties(options?: {
 // Create a new property listing, preferring the backend DB route so submissions are visible to admin.
 export async function createSubmission(data: any) {
   try {
+    const { data: sessionData } = await withTimeout(
+      supabase.auth.getSession(),
+      5_000,
+      "La recuperation de la session utilisateur prend trop de temps."
+    );
+    const accessToken = sessionData.session?.access_token;
+
     const response = await withTimeout(
       fetch(`${BACKEND_BASE_URL}/api/admin/submissions/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({ submission: data }),
       }),
@@ -1049,11 +1057,19 @@ export async function updateSubmissionMedia(
   supabaseId: number,
   media: { image?: string; gallery?: string[]; video_url?: string | null },
 ) {
+  const { data: sessionData } = await withTimeout(
+    supabase.auth.getSession(),
+    5_000,
+    "La recuperation de la session utilisateur prend trop de temps."
+  );
+  const accessToken = sessionData.session?.access_token;
+
   const response = await withTimeout(
     fetch(`${BACKEND_BASE_URL}/api/admin/submissions/${supabaseId}/media`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
       body: JSON.stringify(media),
     }),
@@ -1081,6 +1097,21 @@ export async function updateSubmissionMedia(
   emitPropertiesChanged();
 
   return updated;
+}
+
+function getVideoMimeType(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  const mimeMap: Record<string, string> = {
+    mp4: "video/mp4",
+    webm: "video/webm",
+    ogg: "video/ogg",
+    mov: "video/quicktime",
+    avi: "video/x-msvideo",
+    mkv: "video/x-matroska",
+    m4v: "video/mp4",
+    "3gp": "video/3gpp",
+  };
+  return mimeMap[ext || ""] || "video/mp4";
 }
 
 function sanitizeFileName(value: string) {
@@ -1166,11 +1197,11 @@ async function uploadVideoFileViaBackend(file: File, options: VideoUploadOptions
       method: "PUT",
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        "Content-Type": file.type || "video/mp4",
+        "Content-Type": file.type || getVideoMimeType(file.name),
         "X-Upload-Filename": file.name,
       },
       file,
-      timeoutMs: 180_000,
+      timeoutMs: 300_000,
       timeoutMessage: "L'envoi de la video via le serveur prend trop de temps.",
       onProgress: options.onProgress,
     }
@@ -1192,7 +1223,7 @@ async function uploadVideoFileViaBackend(file: File, options: VideoUploadOptions
   return { videoUrl: payload.publicUrl as string, previewUrl: (payload.previewUrl as string) ?? null };
 }
 
-async function uploadPhotoFileViaBackend(file: File) {
+async function uploadPhotoFileViaBackend(file: File, onProgress?: (pct: number) => void) {
   const { data } = await withTimeout(
     supabase.auth.getSession(),
     5_000,
@@ -1204,30 +1235,36 @@ async function uploadPhotoFileViaBackend(file: File) {
     throw new Error("Session utilisateur introuvable pour l'upload photo.");
   }
 
-  const response = await withTimeout(
-    fetch(`${BACKEND_BASE_URL}/api/uploads/photo-upload`, {
+  onProgress?.(0);
+
+  const xhr = await uploadFileWithProgress(
+    {
+      url: `${BACKEND_BASE_URL}/api/uploads/photo-upload`,
       method: "PUT",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": file.type || "image/jpeg",
         "X-Upload-Filename": file.name,
       },
-      body: file,
-    }),
-    90_000,
-    "L'envoi de la photo via le serveur prend trop de temps."
+      file,
+      timeoutMs: 90_000,
+      timeoutMessage: "L'envoi de la photo via le serveur prend trop de temps.",
+      onProgress,
+    }
   );
 
   let payload: any = null;
   try {
-    payload = await response.json();
+    payload = JSON.parse(xhr.responseText || "null");
   } catch {
     payload = null;
   }
 
-  if (!response.ok || !payload?.publicUrl) {
+  if (xhr.status < 200 || xhr.status >= 300 || !payload?.publicUrl) {
     throw new Error(payload?.error || "Impossible d'envoyer la photo via le serveur.");
   }
+
+  onProgress?.(100);
 
   return payload.publicUrl as string;
 }
@@ -1243,7 +1280,7 @@ export async function uploadVideoFileDirect(file: File, options: VideoUploadOpti
         headers,
         body: JSON.stringify({
           filename: file.name,
-          content_type: file.type || "video/mp4",
+          content_type: file.type || getVideoMimeType(file.name),
         }),
       }),
       45_000,
@@ -1285,10 +1322,10 @@ export async function uploadVideoFileDirect(file: File, options: VideoUploadOpti
         url: payload.uploadUrl,
         method: "PUT",
         headers: {
-          "Content-Type": file.type || "video/mp4",
+          "Content-Type": file.type || getVideoMimeType(file.name),
         },
         file,
-        timeoutMs: 120_000,
+        timeoutMs: 300_000,
         timeoutMessage: "L'envoi direct de la video prend trop de temps.",
         onProgress: options.onProgress,
       }
@@ -1349,7 +1386,7 @@ async function uploadMediaFile(file: File, folder: "photos" | "videos") {
       upsert: false,
       contentType: file.type || undefined,
     }),
-    folder === "videos" ? 120_000 : 45_000,
+    folder === "videos" ? 300_000 : 45_000,
     `L'envoi de la ${folder === "videos" ? "video" : "photo"} prend trop de temps.`
   );
 
@@ -1366,16 +1403,58 @@ async function uploadMediaFile(file: File, folder: "photos" | "videos") {
   return data.publicUrl;
 }
 
-export async function uploadAllMedia(photos: File[], videoFile?: File | null) {
-  const photoUrls = await Promise.all(photos.map((file) => uploadPhotoFileViaBackend(file)));
+type UploadAllProgressCallback = (overall: number, label: string) => void;
+
+export async function uploadAllMedia(
+  photos: File[],
+  videoFile?: File | null,
+  onProgress?: UploadAllProgressCallback,
+) {
+  const totalItems = photos.length + (videoFile ? 1 : 0);
+  const photoProgress = new Array<number>(photos.length).fill(0);
+  let videoProgress = 0;
+
+  const report = () => {
+    if (!onProgress) return;
+    const photoSum = photoProgress.reduce((a, b) => a + b, 0);
+    const totalPct = totalItems > 0 ? Math.round((photoSum + videoProgress) / totalItems) : 100;
+    onProgress(totalPct, videoFile && videoProgress > 0 && videoProgress < 100 ? "Video..." : "Photos...");
+  };
+
+  const photoResults = await Promise.allSettled(
+    photos.length > 0
+      ? photos.map((file, i) =>
+          uploadPhotoFileViaBackend(file, (pct) => {
+            photoProgress[i] = pct;
+            report();
+          }),
+        )
+      : [],
+  );
+  const photoUrls: string[] = [];
+  for (const result of photoResults) {
+    if (result.status === "fulfilled" && result.value) {
+      photoUrls.push(result.value);
+    } else {
+      console.error("Photo upload failed:", result.status === "rejected" ? result.reason : "unknown error");
+    }
+  }
+
   let videoResult: { videoUrl: string; previewUrl: string | null } | null = null;
   if (videoFile) {
     try {
-      videoResult = await uploadVideoFileDirect(videoFile);
+      videoResult = await uploadVideoFileDirect(videoFile, {
+        onProgress: (pct) => {
+          videoProgress = pct;
+          report();
+        },
+      });
     } catch {
       const fallbackUrl = await uploadMediaFile(videoFile, "videos");
       videoResult = { videoUrl: fallbackUrl, previewUrl: null };
     }
+    videoProgress = 100;
+    report();
   }
 
   return { photoUrls, videoUrl: videoResult?.videoUrl ?? null, videoPreviewUrl: videoResult?.previewUrl ?? null };

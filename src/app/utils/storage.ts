@@ -357,17 +357,17 @@ export function getListingSubmissions(): ListingSubmission[] {
 }
 
 export function createListingSubmission(
-  payload: Omit<ListingSubmission, "id" | "publicId" | "status" | "featured" | "createdAt" | "reviewedAt">,
-) {
+  payload: Record<string, unknown>,
+): ListingSubmission {
   const current = getListingSubmissionsInternal();
   const entry: ListingSubmission = {
-    ...payload,
+    ...(payload as unknown as Partial<ListingSubmission>),
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     publicId: Date.now(),
-    status: "pending",
+    status: "pending" as ListingStatus,
     featured: false,
     createdAt: new Date().toISOString(),
-  };
+  } as ListingSubmission;
 
   current.unshift(entry);
   saveListingSubmissionsInternal(current);

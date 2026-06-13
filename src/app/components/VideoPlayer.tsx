@@ -44,6 +44,7 @@ export function VideoPlayer({
   const [isMuted, setIsMuted] = useState(startMuted);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [showControls, setShowControls] = useState(true);
@@ -138,6 +139,7 @@ export function VideoPlayer({
     setIsMuted(startMuted);
     setIsPlaying(false);
     setIsBuffering(true);
+    setHasError(false);
     setDuration(0);
     setCurrentTime(0);
     setShowControls(true);
@@ -181,7 +183,7 @@ export function VideoPlayer({
 
   return (
     <div
-      className={`group relative h-full w-full overflow-hidden rounded-[inherit] bg-slate-950 ${className ?? ""}`}
+      className={`group relative h-full w-full overflow-hidden rounded-[inherit] bg-transparent ${className ?? ""}`}
       onPointerMove={() => {
         setShowControls(true);
         if (isPlaying) {
@@ -243,13 +245,20 @@ export function VideoPlayer({
         onError={() => {
           setIsBuffering(false);
           setIsPlaying(false);
+          setHasError(true);
           onError?.();
         }}
       >
         Votre navigateur ne peut pas lire cette vidéo.
       </video>
 
-      {isBuffering ? (
+      {hasError ? (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/8">
+          <div className="inline-flex items-center gap-2 rounded-full bg-slate-950/72 px-4 py-2 text-sm font-medium text-white shadow-lg">
+            Lecture non disponible
+          </div>
+        </div>
+      ) : isBuffering ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/12 backdrop-blur-[1px]">
           <div className="inline-flex items-center gap-2 rounded-full bg-slate-950/72 px-3 py-2 text-sm font-medium text-white shadow-lg">
             <LoaderCircle className="h-4 w-4 animate-spin" />

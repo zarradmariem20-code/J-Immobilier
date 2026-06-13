@@ -1,10 +1,21 @@
 import { Router } from "express";
 import { dbPool } from "../lib/db.js";
+import { requireAuth } from "../middleware/auth.js";
 import { postListingToSocial } from "../services/social.js";
 import { generateVideoPreview } from "../utils/videoPreview.js";
 import { uploadVideoPreviewBuffer } from "../services/r2.js";
 
 const router = Router();
+
+function deriveSocialImageUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  for (const suffix of ["-medium.webp", "-full.webp"]) {
+    if (url.includes(suffix)) {
+      return url.replace(suffix, "-social.jpg");
+    }
+  }
+  return url;
+}
 
 const VISIT_AUTOCOMPLETE_INTERVAL_MS = 60_000;
 let lastVisitAutocompleteRunAt = 0;
@@ -171,7 +182,7 @@ router.get("/properties", async (req, res) => {
   }
 });
 
-router.post("/submissions/create", async (req, res) => {
+router.post("/submissions/create", requireAuth, async (req, res) => {
   const body = req.body as CreateSubmissionBody;
   const submission = body?.submission;
 
@@ -248,8 +259,8 @@ router.post("/submissions/create", async (req, res) => {
   }
 });
 
-router.patch("/submissions/:supabaseId/media", async (req, res) => {
-  const supabaseId = Number.parseInt(req.params.supabaseId, 10);
+router.patch("/submissions/:supabaseId/media", requireAuth, async (req, res) => {
+  const supabaseId = Number.parseInt(String(req.params.supabaseId), 10);
 
   if (!Number.isFinite(supabaseId)) {
     return res.status(400).json({ error: "Invalid property id." });
@@ -440,9 +451,9 @@ router.post("/submissions/approve", async (req, res) => {
       let socialResults = {};
       if (socialOptions.postToFacebook || socialOptions.postToInstagram || socialOptions.postToTikTok) {
         const imageUrl = propertyPayload.image || undefined;
-        const socialImageUrl = imageUrl?.includes("-medium.webp")
-          ? imageUrl.replace("-medium.webp", "-social.jpg")
-          : imageUrl;
+        const socialImageUrl = deriveSocialImageUrl(imageUrl);
+        const gallery = propertyPayload.gallery?.filter(Boolean) as string[] | undefined;
+        const socialGallery = gallery?.map((url) => deriveSocialImageUrl(url)).filter(Boolean) as string[] | undefined;
         socialResults = await postListingToSocial(
           {
             title: propertyPayload.title,
@@ -453,6 +464,8 @@ router.post("/submissions/approve", async (req, res) => {
             location: propertyPayload.location,
             imageUrl,
             socialImageUrl,
+            gallery,
+            socialGallery,
             videoUrl: propertyPayload.video_url || undefined,
             propertyId: submission.supabaseId,
           },
@@ -534,9 +547,9 @@ router.post("/submissions/approve", async (req, res) => {
     let socialResults = {};
     if (socialOptions.postToFacebook || socialOptions.postToInstagram || socialOptions.postToTikTok) {
       const imageUrl = propertyPayload.image || undefined;
-      const socialImageUrl = imageUrl?.includes("-medium.webp")
-        ? imageUrl.replace("-medium.webp", "-social.jpg")
-        : imageUrl;
+      const socialImageUrl = deriveSocialImageUrl(imageUrl);
+      const gallery = propertyPayload.gallery?.filter(Boolean) as string[] | undefined;
+      const socialGallery = gallery?.map((url) => deriveSocialImageUrl(url)).filter(Boolean) as string[] | undefined;
       socialResults = await postListingToSocial(
         {
           title: propertyPayload.title,
@@ -547,6 +560,8 @@ router.post("/submissions/approve", async (req, res) => {
           location: propertyPayload.location,
           imageUrl,
           socialImageUrl,
+          gallery,
+          socialGallery,
           videoUrl: propertyPayload.video_url || undefined,
           propertyId: insertedId,
         },
@@ -591,7 +606,7 @@ router.post("/submissions/inactivate", async (req, res) => {
 });
 
 router.delete("/submissions/:supabaseId", async (req, res) => {
-  const supabaseId = Number.parseInt(req.params.supabaseId, 10);
+  const supabaseId = Number.parseInt(String(req.params.supabaseId), 10);
 
   if (!Number.isFinite(supabaseId)) {
     return res.status(400).json({ error: "Missing or invalid supabaseId." });

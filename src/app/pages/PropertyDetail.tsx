@@ -91,7 +91,7 @@ export function PropertyDetail() {
     const firstImageIndex = mediaItems.findIndex((item) => item.kind === "image");
     return firstImageIndex >= 0 ? firstImageIndex : 0;
   }, [mediaItems]);
-  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(preferredInitialMediaIndex);
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
@@ -496,9 +496,13 @@ export function PropertyDetail() {
           </div>
 
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.65fr_0.95fr] overflow-hidden">
-            <div className="rounded-[24px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] p-3 sm:rounded-[28px] sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)] overflow-hidden min-w-0">
-              <div className="relative overflow-hidden rounded-[18px] border border-slate-200/40 bg-slate-50 h-[240px] sm:h-[380px] md:h-[480px]"
+            <div className="-mx-4 sm:mx-0 sm:rounded-[28px] bg-[linear-gradient(135deg,#f8fafc_0%,#eef3f8_100%)] sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)] overflow-hidden min-w-0">
+              <div
+                className="relative overflow-hidden sm:rounded-[18px] sm:border sm:border-slate-200/40 bg-slate-50"
                 ref={mediaContainerRef}
+                style={activeMedia.kind === "video" && activeVideoAspectRatio
+                  ? { aspectRatio: `${activeVideoAspectRatio}`, height: "auto", maxHeight: "80vh" }
+                  : { height: "clamp(240px, 50vw, 480px)" }}
               >
                 <div
                   className="flex h-full transition-transform duration-300 ease-out"
@@ -524,7 +528,7 @@ export function PropertyDetail() {
                           draggable={false}
                         />
                       ) : item.kind === "video" && item.src ? (
-                        <div className="flex h-full w-full items-center justify-center bg-slate-950">
+                        <div className="h-full w-full">
                           <VideoPlayer
                             src={item.src}
                             poster={coverImage || galleryImages[0] || undefined}

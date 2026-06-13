@@ -140,8 +140,11 @@ export function SubmitListing() {
   const [videoUploadProgress, setVideoUploadProgress] = useState(0);
   const [photoError, setPhotoError] = useState("");
   const [videoError, setVideoError] = useState("");
+  const [videoSizeWarning, setVideoSizeWarning] = useState("");
   const [formError, setFormError] = useState("");
   const [submissionNotice, setSubmissionNotice] = useState("");
+  const [mediaUploadProgress, setMediaUploadProgress] = useState(0);
+  const [mediaUploadLabel, setMediaUploadLabel] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [submissionReceipt, setSubmissionReceipt] = useState<SubmissionReceipt | null>(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -283,6 +286,11 @@ export function SubmitListing() {
       }
 
       setVideoError("");
+      setVideoSizeWarning(
+        selected.size > 50 * 1024 * 1024
+          ? "Cette video depasse 50 MB. Le televersement peut prendre plusieurs minutes."
+          : ""
+      );
       setUploadedVideoUrl(null);
       setVideoUploadProgress(0);
       setVideoFile(selected);
@@ -297,10 +305,10 @@ export function SubmitListing() {
       setIsUploadingVideo(true);
 
       try {
-        const uploadedUrl = await uploadVideoFileDirect(selected, {
+        const uploadedResult = await uploadVideoFileDirect(selected, {
           onProgress: (progress) => setVideoUploadProgress(progress),
         });
-        setUploadedVideoUrl(uploadedUrl);
+        setUploadedVideoUrl(uploadedResult.videoUrl);
         setVideoUploadProgress(100);
       } catch (uploadError) {
         console.error("Immediate video upload failed:", uploadError);
@@ -391,6 +399,7 @@ export function SubmitListing() {
     clearSelectedVideo();
     setPhotoError("");
     setVideoError("");
+    setVideoSizeWarning("");
     setFormError("");
   };
 
@@ -524,7 +533,7 @@ export function SubmitListing() {
       });
 
       setSubmissionReceipt({
-        id: "id" in created ? created.id : created.publicId,
+        id: (created as { id: string; publicId: number }).id,
         title: created.title,
         sentAt: new Date().toISOString(),
       });
@@ -539,8 +548,11 @@ export function SubmitListing() {
         void (async () => {
           try {
             const mediaResult = await withTimeout(
-              uploadAllMedia(submittedPhotos, submittedVideoUrl ? null : submittedVideoFile),
-              180000,
+              uploadAllMedia(submittedPhotos, submittedVideoUrl ? null : submittedVideoFile, (pct, label) => {
+                setMediaUploadProgress(pct);
+                setMediaUploadLabel(label);
+              }),
+              300000,
               "L'envoi des medias prend trop de temps. Merci de reessayer et de garder la page ouverte jusqu'a la fin."
             );
 
@@ -551,13 +563,18 @@ export function SubmitListing() {
               throw new Error("La video n'a pas pu etre enregistree. Merci de reessayer.");
             }
 
-            if (photoUrls.length > 0 || videoUrl) {
+            const mediaUpdate: Record<string, unknown> = {};
+            if (photoUrls.length > 0) {
+              mediaUpdate.image = photoUrls[0];
+              mediaUpdate.gallery = photoUrls;
+            }
+            if (videoUrl) {
+              mediaUpdate.video_url = videoUrl;
+            }
+
+            if (Object.keys(mediaUpdate).length > 0) {
               await withTimeout(
-                updateSubmissionMedia(remotePending.id, {
-                  image: photoUrls[0] || remotePending.image || "",
-                  gallery: photoUrls,
-                  video_url: videoUrl,
-                }),
+                updateSubmissionMedia(remotePending.id, mediaUpdate),
                 15000,
                 "L'annonce a bien ete envoyee, mais l'ajout des medias prend trop de temps."
               );
@@ -1061,6 +1078,7 @@ export function SubmitListing() {
                         </div>
                       )}
                       {videoError && <p className="text-xs font-semibold text-rose-600">{videoError}</p>}
+                      {videoSizeWarning && !videoError && <p className="text-xs font-medium text-amber-600">{videoSizeWarning}</p>}
                     </div>
                   </div>
                 </div>
@@ -1101,6 +1119,18 @@ export function SubmitListing() {
             {submissionNotice && (
               <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
                 {submissionNotice}
+              </div>
+            )}
+
+            {mediaUploadProgress > 0 && mediaUploadProgress < 100 && (
+              <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800">
+                Televersement des medias {mediaUploadProgress}%{mediaUploadLabel ? ` (${mediaUploadLabel})` : ""}
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-sky-200">
+                  <div
+                    className="h-full rounded-full bg-sky-600 transition-all duration-300"
+                    style={{ width: `${mediaUploadProgress}%` }}
+                  />
+                </div>
               </div>
             )}
 

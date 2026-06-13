@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, LocateFixed, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, LocateFixed, Save } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import { approveListingWithBackend, clearListingsCache, getProperties, uploadAllMedia, getPublicSiteSettings, type SiteSettings } from "../../lib/api";
 import { deriveLocationLabel, inferRegionCity, tunisiaRegionOptions } from "../data/locations";
@@ -159,6 +159,8 @@ export function AdminEditListing() {
   const [existingVideoUrl, setExistingVideoUrl] = useState("");
   const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
   const [newVideoPreviewUrl, setNewVideoPreviewUrl] = useState("");
+  const [mediaUploadProgress, setMediaUploadProgress] = useState(0);
+  const [isDownloadingMedia, setIsDownloadingMedia] = useState(false);
   const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
   const regionOptions = getRegionOptions(siteSettings);
   const cityOptions = formState.region ? getCitiesForRegionBySettings(siteSettings, formState.region) : [];
@@ -328,6 +330,75 @@ export function AdminEditListing() {
     );
   };
 
+  const downloadAllMediaAsZip = async () => {
+    if (!listing) return;
+
+    const urls: { url: string; name: string }[] = [];
+    const seen = new Set<string>();
+
+    if (listing.coverImage && !seen.has(listing.coverImage)) {
+      seen.add(listing.coverImage);
+      const ext = listing.coverImage.split(".").pop()?.split("?")[0] || "jpg";
+      urls.push({ url: listing.coverImage, name: `image_principale.${ext}` });
+    }
+
+    if (listing.gallery) {
+      listing.gallery.forEach((url, i) => {
+        if (seen.has(url)) return;
+        seen.add(url);
+        const ext = url.split(".").pop()?.split("?")[0] || "jpg";
+        urls.push({ url, name: `photo_${i + 1}.${ext}` });
+      });
+    }
+
+    if (listing.videoUrl && !seen.has(listing.videoUrl)) {
+      const ext = listing.videoUrl.split(".")?.pop()?.split("?")[0] || "mp4";
+      urls.push({ url: listing.videoUrl, name: `video.${ext}` });
+    }
+
+    if (urls.length === 0) return;
+
+    setIsDownloadingMedia(true);
+
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+
+      const results = await Promise.allSettled(
+        urls.map(async ({ url, name }) => {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          zip.file(name, await response.blob());
+        }),
+      );
+
+      for (const r of results) {
+        if (r.status === "rejected") {
+          console.error("Download failed for one media:", r.reason);
+        }
+      }
+
+      if (Object.keys(zip.files).length === 0) {
+        setError("Impossible de telecharger les medias.");
+        return;
+      }
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${listing.title.replace(/[^a-z0-9]/gi, "_").replace(/_+/g, "_").replace(/^_|_$/g, "")}_medias.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    } catch (err) {
+      console.error("ZIP creation failed:", err);
+      setError("Impossible de creer l'archive ZIP.");
+    } finally {
+      setIsDownloadingMedia(false);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!listing) return;
@@ -352,10 +423,11 @@ export function AdminEditListing() {
     setSaving(true);
     setError("");
     setSuccess("");
+    setMediaUploadProgress(0);
 
     try {
       if (newPhotoFiles.length > 0 || newVideoFile) {
-        const mediaUpload = await uploadAllMedia(newPhotoFiles, newVideoFile);
+        const mediaUpload = await uploadAllMedia(newPhotoFiles, newVideoFile, setMediaUploadProgress);
         if (mediaUpload.photoUrls.length > 0) {
           gallery = [...gallery, ...mediaUpload.photoUrls];
         }
@@ -556,7 +628,20 @@ export function AdminEditListing() {
                   </div>
                   {(galleryPreviewUrls.length > 0 || videoPreviewUrl) && (
                     <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Aperçu des médias</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Aperçu des médias</p>
+                        {(existingGalleryUrls.length > 0 || existingVideoUrl) && (
+                          <button
+                            type="button"
+                            onClick={downloadAllMediaAsZip}
+                            disabled={isDownloadingMedia}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-200 disabled:opacity-50"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            {isDownloadingMedia ? "Preparation..." : "Tout telecharger (ZIP)"}
+                          </button>
+                        )}
+                      </div>
 
                       {videoPreviewUrl && (
                         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
@@ -642,6 +727,18 @@ export function AdminEditListing() {
 
           {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>}
           {success && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{success}</div>}
+
+          {mediaUploadProgress > 0 && mediaUploadProgress < 100 && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700">
+              Televersement des medias {mediaUploadProgress}%
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-sky-200">
+                <div
+                  className="h-full rounded-full bg-sky-600 transition-all duration-300"
+                  style={{ width: `${mediaUploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end">
             <button type="submit" disabled={saving || !listing} className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#020617_0%,#0f172a_58%,#0369a1_100%)] px-5 py-3 text-sm font-semibold text-white shadow-md transition hover:brightness-110 disabled:opacity-60">
